@@ -6,11 +6,12 @@
 #include "OnlineSessionSettings.h"
 #include "Engine/GameInstance.h"
 
-void UMenu::MenuSetup(int32 NumberOfPublicConnections, FString TypeOfMatch)
+void UMenu::MenuSetup(int32 NumberOfPublicConnections, FString TypeOfMatch, FString LobbyPath)
 {
     // Store session parameters for later use when the host button is clicked
     NumPublicConnections = NumberOfPublicConnections;
     MatchType = TypeOfMatch;
+    LobbyMapPath = FString::Printf(TEXT("%s?listen"), *LobbyPath);
 
     AddToViewport();
     SetVisibility(ESlateVisibility::Visible);
@@ -55,6 +56,11 @@ void UMenu::MenuSetup(int32 NumberOfPublicConnections, FString TypeOfMatch)
     }
 }
 
+void UMenu::SetLobbyMapPath(FString LobbyPath)
+{
+    LobbyMapPath = FString::Printf(TEXT("%s?listen"), *LobbyPath);
+}
+
 void UMenu::MenuTearDown()
 {
     RemoveFromParent();
@@ -72,6 +78,18 @@ void UMenu::MenuTearDown()
     }
 }
 
+void UMenu::SetButtonsEnabled(bool bEnabled)
+{
+    if (HostButton)
+    {
+        HostButton->SetIsEnabled(bEnabled);
+    }
+    if (JoinButton)
+    {
+        JoinButton->SetIsEnabled(bEnabled);
+    }
+}
+
 void UMenu::NativeDestruct()
 {
     MenuTearDown();
@@ -80,6 +98,8 @@ void UMenu::NativeDestruct()
 
 void UMenu::HostButtonClicked()
 {
+	SetButtonsEnabled(false);
+
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Green, FString::Printf(TEXT("Hosting session with %d players, match type: %s"), NumPublicConnections, *MatchType));
@@ -94,6 +114,8 @@ void UMenu::HostButtonClicked()
 
 void UMenu::JoinButtonClicked()
 {
+	SetButtonsEnabled(false);
+
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Green, TEXT("Searching for sessions..."));
@@ -116,11 +138,12 @@ void UMenu::OncreateSession(bool bWasSuccessful)
         UWorld* World = GetWorld();
         if (World)
         {
-            World->ServerTravel("/Game/Maps/Lobby?listen");
+            World->ServerTravel(LobbyMapPath);
         }
     }
     else
     {
+        SetButtonsEnabled(true);
         if (GEngine)
         {
             GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red, TEXT("Failed to create session!"));
@@ -152,6 +175,7 @@ void UMenu::OnFindSessions(bool bWasSuccessful, const TArray<FOnlineSessionSearc
         }
         else
         {
+            SetButtonsEnabled(true);
             if (GEngine)
             {
                 GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Yellow,
@@ -161,6 +185,7 @@ void UMenu::OnFindSessions(bool bWasSuccessful, const TArray<FOnlineSessionSearc
     }
     else
     {
+        SetButtonsEnabled(true);
         if (GEngine)
         {
             GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red,
@@ -175,8 +200,32 @@ void UMenu::OnJoinSession(EOnJoinSessionCompleteResult::Type Result)
     {
         if (GEngine)
         {
-            GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Green, TEXT("Joined session!"));
+            GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Green, TEXT("Joined session! Traveling..."));
         }
+
+        // Resolve the connection string and travel to the server
+        UWorld* World = GetWorld();
+        if (World && MultiplayerSessionsSubsystem)
+        {
+            IOnlineSessionPtr SessionIf = MultiplayerSessionsSubsystem->GetSessionInterface();
+            if (SessionIf.IsValid())
+            {
+                FString ConnectString;
+                if (SessionIf->GetResolvedConnectString(NAME_GameSession, ConnectString))
+                {
+                    APlayerController* PC = World->GetFirstPlayerController();
+                    if (PC)
+                    {
+                        PC->ClientTravel(ConnectString, TRAVEL_Absolute);
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("OnJoinSession: Failed to resolve connect string."));
+                }
+            }
+        }
+
         // Clear cached results since we joined successfully
         CachedSessionResults.Empty();
         LastSessionSearchIndex = -1;
@@ -202,6 +251,7 @@ void UMenu::OnJoinSession(EOnJoinSessionCompleteResult::Type Result)
         }
         else
         {
+            SetButtonsEnabled(true);
             if (GEngine)
             {
                 GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red,

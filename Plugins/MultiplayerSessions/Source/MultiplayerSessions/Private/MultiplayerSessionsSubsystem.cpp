@@ -31,11 +31,15 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
         return;
     }
 
-    // Destroy any existing session before creating a new one
+    // If a session already exists, defer creation until after it is destroyed
     auto ExistingSession = SessionInterface->GetNamedSession(NAME_GameSession);
     if (ExistingSession != nullptr)
     {
-        SessionInterface->DestroySession(NAME_GameSession);
+        bCreateSessionOnDestroy = true;
+        PendingNumPublicConnections = NumPublicConnections;
+        PendingMatchType = MatchType;
+        DestroySession();
+        return;
     }
 
     // Register the completion delegate
@@ -51,6 +55,7 @@ void UMultiplayerSessionsSubsystem::CreateSession(int32 NumPublicConnections, FS
     LastSessionSettings->bUsesPresence = true;
     LastSessionSettings->bUseLobbiesIfAvailable = true;
     LastSessionSettings->Set(FName("MatchType"), MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+    LastSessionSettings->BuildUniqueId = 1;
 
     // Validate LocalPlayer and UniqueNetId
     const ULocalPlayer* LocalPlayer = GetWorld()->GetFirstLocalPlayerFromController();
@@ -176,5 +181,14 @@ void UMultiplayerSessionsSubsystem::OnDestroySessionComplete(FName SessionName, 
     {
         SessionInterface->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateHandle);
     }
+
+    // If DestroySession was called as part of the deferred creation flow, proceed to create
+    if (bCreateSessionOnDestroy)
+    {
+        bCreateSessionOnDestroy = false;
+        CreateSession(PendingNumPublicConnections, PendingMatchType);
+        return;
+    }
+
     MultiplayerOnDestroySessionComplete.Broadcast(bWasSuccessful);
 }

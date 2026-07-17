@@ -15,7 +15,9 @@ class MULTIPLAYERSESSIONS_API UMenu : public UUserWidget
     
 public:
     UFUNCTION(BlueprintCallable)
-    void MenuSetup(int32 NumberOfPublicConnections = 4, FString TypeOfMatch = FString("FreeForAll"));
+    void MenuSetup(int32 NumberOfPublicConnections = 4, FString TypeOfMatch = FString("FreeForAll"), FString LobbyPath = TEXT("/Game/Maps/Lobby"));
+    UFUNCTION(BlueprintCallable)
+    void SetLobbyMapPath(FString LobbyPath);
 
     void MenuTearDown();
 
@@ -43,10 +45,13 @@ private:
     void OnJoinSession(EOnJoinSessionCompleteResult::Type Result);
     void OnDestroySession(bool bWasSuccessful);
 
+    void SetButtonsEnabled(bool bEnabled);
+
     class UMultiplayerSessionsSubsystem* MultiplayerSessionsSubsystem;
 
     int32 NumPublicConnections{4};
     FString MatchType{TEXT("FreeForAll")};
+    FString LobbyMapPath;
     TArray<FOnlineSessionSearchResult> CachedSessionResults;
     int32 LastSessionSearchIndex{-1};
 };

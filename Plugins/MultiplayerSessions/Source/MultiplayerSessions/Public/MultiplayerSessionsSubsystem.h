@@ -30,6 +30,7 @@ public:
     void JoinSession(const FOnlineSessionSearchResult& SessionResult);
     void DestroySession();
     void StartSession() {}
+    IOnlineSessionPtr GetSessionInterface() const { return SessionInterface; }
 
     // Public broadcast delegates (bind to these from outside)
     FMultiplayerOnCreateSessionComplete MultiplayerOnCreateSessionComplete;
@@ -61,4 +62,9 @@ private:
     IOnlineSessionPtr SessionInterface;
     TSharedPtr<FOnlineSessionSettings> LastSessionSettings;
     TSharedPtr<FOnlineSessionSearch> LastSessionSearch;
+
+    // Pending creation state (deferred until after DestroySession completes)
+    bool bCreateSessionOnDestroy{false};
+    int32 PendingNumPublicConnections{0};
+    FString PendingMatchType;
 };
