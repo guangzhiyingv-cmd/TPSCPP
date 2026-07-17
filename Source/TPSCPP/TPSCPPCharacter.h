@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
 #include "TPSCPPCharacter.generated.h"
 
 class USpringArmComponent;
@@ -104,8 +105,20 @@ protected:
 
 	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
 
+	UFUNCTION(BlueprintCallable)
+	void JoinGameSession();
+
+	void OnFindSessionsComplete(bool bWasSuccessful);
+
+	UFUNCTION(BlueprintCallable)
+	void JoinSession();
+
+	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 private:
 
 	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;		
+	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
+	FOnJoinSessionCompleteDelegate JoinSessionCompleteDelegate;
+	TSharedPtr<FOnlineSessionSearch> SessionSearch;
 };
 
