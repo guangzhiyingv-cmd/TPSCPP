@@ -5,8 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
-#include "Interfaces/OnlineSessionInterface.h"
-#include "OnlineSessionSettings.h"
 #include "TPSCPPCharacter.generated.h"
 
 class USpringArmComponent;
@@ -94,31 +92,5 @@ public:
 
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-
-public:
-
-	IOnlineSessionPtr SessionInterface;
-
-protected:
-	UFUNCTION(BlueprintCallable)
-	void CreateGameSession();	
-
-	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
-
-	UFUNCTION(BlueprintCallable)
-	void JoinGameSession();
-
-	void OnFindSessionsComplete(bool bWasSuccessful);
-
-	UFUNCTION(BlueprintCallable)
-	void JoinSession();
-
-	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
-private:
-
-	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;		
-	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
-	FOnJoinSessionCompleteDelegate JoinSessionCompleteDelegate;
-	TSharedPtr<FOnlineSessionSearch> SessionSearch;
 };
 

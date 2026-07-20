@@ -1,0 +1,2 @@
+Using bundled DotNet SDK version: 10.0 win-x64
+Running UnrealBuildTool: dotnet "..\..\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" TPSCPPEditor Win64 Development D:\UEProjects\TPSCPP\TPSCPP.uproject -waitmutex

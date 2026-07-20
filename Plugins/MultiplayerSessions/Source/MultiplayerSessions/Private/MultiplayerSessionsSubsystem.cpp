@@ -96,7 +96,7 @@ void UMultiplayerSessionsSubsystem::FindSessions(int32 MaxSearchResults)
     LastSessionSearch = MakeShareable(new FOnlineSessionSearch());
     LastSessionSearch->MaxSearchResults = MaxSearchResults;
     LastSessionSearch->bIsLanQuery = false;
-    LastSessionSearch->QuerySettings.Set(FName("SEARCH_PRESENCE"), true, EOnlineComparisonOp::Equals);
+    LastSessionSearch->QuerySettings.Set(FName("LOBBYSEARCH"), true, EOnlineComparisonOp::Equals);
 
     // Validate LocalPlayer and UniqueNetId
     const ULocalPlayer* LocalPlayer = GetWorld()->GetFirstLocalPlayerFromController();
