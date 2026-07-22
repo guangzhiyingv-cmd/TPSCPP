@@ -3,6 +3,7 @@
 
 #include "LobbyGameMode.h"
 #include "GameFramework/PlayerState.h"
+#include "Engine/World.h"
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
 {
@@ -20,6 +21,19 @@ void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)
                 -1, 10.f, FColor::Cyan,
                 FString::Printf(TEXT("Player joined: %s (Total: %d)"), *PlayerName, PlayerCount)
             );
+        }
+
+        if (PlayerCount >= MinPlayersToStart)
+        {
+            if (GEngine)
+            {
+                GEngine->AddOnScreenDebugMessage(
+                    -1, 10.f, FColor::Green,
+                    FString::Printf(TEXT("Starting game with %d players!"), PlayerCount)
+                );
+            }
+
+            GetWorld()->SeamlessTravel(TEXT("/Game/Maps/GameLevel"));
         }
     }
 }

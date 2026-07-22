@@ -1,29 +1,54 @@
-# 仓库指南
+﻿# 仓库指南
 
 ## 项目结构与模块组织
 
-这是一个 **TPS C++** Unreal Engine 5 项目，包含三种玩法变体。
+这是一个 **TPS C++** Unreal Engine 5 项目。
 
 ```
-Source/TPSCPP/               — 核心模块（Character, GameMode, PlayerController）
-  Variant_Combat/            — 战斗变体（AI, Animation, Gameplay, Interfaces, UI）
-  Variant_Platforming/       — 平台跳跃变体（Animation）
-  Variant_SideScrolling/     — 横版卷轴变体（AI, Gameplay, Interfaces, UI）
-Content/                     — 蓝图、地图、材质、角色、输入资源
-Config/                      — 引擎、游戏、输入、编辑器配置（.ini）
+Source/
+  TPSCPP/                     — 核心模块
+    TPSCPP.Build.cs / .cpp / .h
+    TPSCPPGameMode.cpp / .h
+    TPSCPPPlayerController.cpp / .h
+    LobbyGameMode.cpp / .h
+    Character/
+      TPSCPPCharacter.cpp / .h
+
+Content/                      — 蓝图、地图、材质、角色、输入资源、特效、武器、声音
+  Blueprints/                 — BP_LobbyGameMode
+  Characters/                 — BP_TPSCharacter, Iris 角色模型, Mannequins（动画/材质/网格/绑定/纹理）
+  Collections/
+  Developers/
+  FX/                         — 粒子系统（射击、爆炸、弹道、命中特效）及材质/网格/纹理
+  Input/                      — 输入映射上下文 IMC_Default / IMC_MouseLook、Action IA_Jump/Look/Move/MouseLook、触摸控件
+  LevelPrototyping/           — 关卡原型物体（门/Door、弹跳板/JumpPad、标靶/Target）
+  Maps/                       — Lobby.umap（多人大厅地图）
+  Materials/                  — 全局材质（M_Eye, M_NPR, M_Outline）
+  Pickups/                    — 6 种武器拾取物及材质/纹理
+  Sound/                      — GrenadeLauncher/Knife/Pistol/Rifle/RocketLauncher/Shotgun/SniperRifle 音频（Cue + Wav）
+  ThirdPerson/                — Lvl_ThirdPerson.umap + BP_ThirdPersonCharacter/GameMode/PlayerController
+  Weapons/                    — 7 种武器网格 + 动画/材质/纹理
+  __ExternalActors__/         — UE 自动生成
+  __ExternalObjects__/        — UE 自动生成
+
+Config/                       — 引擎、游戏、输入、编辑器配置（.ini）
 Plugins/
-  MultiplayerSessions/       — 多人联机插件（会话管理、菜单 UI、Steam OSS 封装）
+  MultiplayerSessions/        — 多人联机插件（会话管理、菜单 UI、Steam Sockets 封装）
   VisualStudioTools/          — VS 集成工具
 ```
 
-每个变体拥有独立的 Character、GameMode 和 PlayerController。共享逻辑应放在核心 `TPSCPP` 模块中。
+共享逻辑放在核心 `TPSCPP` 模块中。
+
+##项目目标
+实现可通过steam远程联机的多人第三人称PVP射击游戏
 
 ## 网络与多人游戏
+
 多人联机功能已从核心 `TPSCPP` 模块解耦，移至 `Plugins/MultiplayerSessions` 插件中。
 
 | 层级 | 组件 |
 |------|------|
-| **网络传输** | `OnlineSubsystemSteam` — `SteamNetDriver` / `SteamNetConnection` |
+| **网络传输** | `SteamSocketsNetDriver` / `SteamSocketsNetConnection`（Steam Sockets 协议） |
 | **会话管理** | `MultiplayerSessionsSubsystem` — 创建 / 查找 / 加入 / 销毁 Steam 会话 |
 | **菜单 UI** | `Menu` — 基于 UMG 的主菜单控件（托管在 `WBP_Menu` 蓝图资产中） |
 | **后端服务** | Steam OSS（`DefaultEngine.ini` 中配置 `SteamDevAppId=480`） |
@@ -34,7 +59,16 @@ Plugins/
 详细网络配置位于 `Config/DefaultEngine.ini`：
 - `[OnlineSubsystem]` — `DefaultPlatformService=Steam`
 - `[OnlineSubsystemSteam]` — `bEnabled=true`, `SteamDevAppId=480`
-- `[/Script/OnlineSubsystemSteam.SteamNetDriver]` — `NetConnectionClassName=/Script/OnlineSubsystemSteam.SteamNetConnection`
+- `[/Script/SteamSockets.SteamSocketsNetDriver]` — `NetConnectionClassName=/Script/SteamSockets.SteamSocketsNetConnection`
+
+## 关卡地图
+
+| 地图 | 说明 |
+|------|------|
+| `/Game/ThirdPerson/Lvl_ThirdPerson` | 基础第三人称关卡（单人测试） |
+| `/Game/Maps/Lobby` | 多人大厅地图（Listen Server 自动跳转至此） |
+
+地图 `Lvl_Combat`、`Lvl_Platforming`、`Lvl_SideScrolling` 仅作为外部 Actor/对象数据存在于 `Content/__ExternalActors__` 和 `Content/__ExternalObjects__` 中，对应三种玩法变体（战斗/平台跳跃/横版卷轴）——这些变体的逻辑目前完全由蓝图和资产驱动，不涉及 C++ 源模块。
 
 ## 构建、测试与开发命令
 
@@ -66,7 +100,7 @@ Plugins/
 
 ## 提交与拉取请求规范
 
-- **提交信息**：使用现在时祈使句（如 "Add crouch mechanic to combat character"）。适当时为受影响的变体或模块添加前缀（`[Combat]`、`[Platforming]`）。
+- **提交信息**：使用现在时祈使句（如 "Add crouch mechanic to combat character"）。适当时为受影响的模块添加前缀（如 `[MultiplayerSessions]`）。
 - **拉取请求**必须包含：
   - 简洁的变更说明及原因
   - 关联 issue 链接（如有）

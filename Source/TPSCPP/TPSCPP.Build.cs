@@ -27,19 +27,9 @@ public class TPSCPP : ModuleRules
 
 		PublicIncludePaths.AddRange(new string[] {
 			"TPSCPP",
-			"TPSCPP/Variant_Platforming",
-			"TPSCPP/Variant_Platforming/Animation",
-			"TPSCPP/Variant_Combat",
-			"TPSCPP/Variant_Combat/AI",
-			"TPSCPP/Variant_Combat/Animation",
-			"TPSCPP/Variant_Combat/Gameplay",
-			"TPSCPP/Variant_Combat/Interfaces",
-			"TPSCPP/Variant_Combat/UI",
-			"TPSCPP/Variant_SideScrolling",
-			"TPSCPP/Variant_SideScrolling/AI",
-			"TPSCPP/Variant_SideScrolling/Gameplay",
-			"TPSCPP/Variant_SideScrolling/Interfaces",
-			"TPSCPP/Variant_SideScrolling/UI"
+			"TPSCPP/Character",
+			"TPSCPP/Components",
+			"TPSCPP/Weapon",
 		});
 
 		// Uncomment if you are using Slate UI
