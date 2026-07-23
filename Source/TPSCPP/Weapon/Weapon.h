@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Weapon.generated.h"
 
 UENUM(BlueprintType)
@@ -34,9 +35,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USphereComponent* AreaSphere;
 
-protected:
-	virtual void BeginPlay() override;
+	/** Widget component displaying the pickup prompt above the weapon. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UWidgetComponent* PickupWidget;
 
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void BeginPlay() override;
 	/** Called when a pawn overlaps the area sphere on the server. */
 	UFUNCTION()
 	virtual void OnSphereOverlap(
@@ -56,6 +61,9 @@ protected:
 		int32 OtherBodyIndex);
 
 public:
-	UPROPERTY(VisibleAnywhere)
+	void ShowPickupWidget(bool bShowWidget);
+
+public:
+	UPROPERTY(VisibleAnywhere, Replicated)
 	EWeaponState WeaponState;
 };

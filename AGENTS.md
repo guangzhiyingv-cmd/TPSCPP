@@ -44,6 +44,8 @@ Plugins/
 
 ## 网络与多人游戏
 
+游戏使用listen模式，需要着重注意网络同步时：逻辑既要能在客户端跑通又要能在同时作为客户端的服务器端跑通!
+
 多人联机功能已从核心 `TPSCPP` 模块解耦，移至 `Plugins/MultiplayerSessions` 插件中。
 
 | 层级 | 组件 |
@@ -53,8 +55,6 @@ Plugins/
 | **菜单 UI** | `Menu` — 基于 UMG 的主菜单控件（托管在 `WBP_Menu` 蓝图资产中） |
 | **后端服务** | Steam OSS（`DefaultEngine.ini` 中配置 `SteamDevAppId=480`） |
 | **Lobby** | 核心模块中的 `ALobbyGameMode`（仅跟踪玩家进出计数） |
-
-`ATPSCPPCharacter` 不再包含任何网络或 `OnlineSubsystem` 代码。所有网络逻辑均通过 `MultiplayerSessions` 插件处理，角色类仅关注输入、移动和摄像机。
 
 详细网络配置位于 `Config/DefaultEngine.ini`：
 - `[OnlineSubsystem]` — `DefaultPlatformService=Steam`
@@ -68,7 +68,6 @@ Plugins/
 | `/Game/ThirdPerson/Lvl_ThirdPerson` | 基础第三人称关卡（单人测试） |
 | `/Game/Maps/Lobby` | 多人大厅地图（Listen Server 自动跳转至此） |
 
-地图 `Lvl_Combat`、`Lvl_Platforming`、`Lvl_SideScrolling` 仅作为外部 Actor/对象数据存在于 `Content/__ExternalActors__` 和 `Content/__ExternalObjects__` 中，对应三种玩法变体（战斗/平台跳跃/横版卷轴）——这些变体的逻辑目前完全由蓝图和资产驱动，不涉及 C++ 源模块。
 
 ## 构建、测试与开发命令
 
@@ -113,6 +112,6 @@ Plugins/
 
 - 修改或添加任何代码前，先向用户展示拟变更内容，待用户明确确认后方可执行。
 - 所有代码与注释必须使用英文书写。
-- 网络代码集中在 `Plugins/MultiplayerSessions/` 中；**不要**在 `TPSCPPCharacter` 或其他核心模块中添加网络相关逻辑。
+- 当用户要求编译时，如需修复错误则读取代码中的逻辑进行修复而不是按照之前对话中的逻辑，因为用户可能已经自己修改过代码。
 - 优先使用项目现有模式与模块边界，而非引入新的抽象。
 - 在充分阅读相关源文件之前，不要对架构或约定做出假设。

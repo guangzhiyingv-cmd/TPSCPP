@@ -74,6 +74,12 @@ protected:
 
 protected:
 
+	/** Server RPC: equip the overlapping weapon. */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_EquipWeapon();
+
+protected:
+
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
 

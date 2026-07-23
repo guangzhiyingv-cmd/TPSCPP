@@ -30,6 +30,7 @@ public class TPSCPP : ModuleRules
 			"TPSCPP/Character",
 			"TPSCPP/Components",
 			"TPSCPP/Weapon",
+			"TPSCPP/HUD",
 		});
 
 		// Uncomment if you are using Slate UI

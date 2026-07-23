@@ -20,18 +20,11 @@ UCombatComponent::UCombatComponent()
 void UCombatComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// ...
-	
 }
 
-
-// Called every frame
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
 }
 
 void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -43,9 +36,32 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 void UCombatComponent::SetOverlappingWeapon(AWeapon* Weapon)
 {
+	if (OverlappingWeapon)
+	{
+		OverlappingWeapon->ShowPickupWidget(false);		//更新时隐藏之前的UI（Host）
+	}
 	if (OverlappingWeapon != Weapon)
 	{
 		OverlappingWeapon = Weapon;
+	}
+	if (Character->IsLocallyControlled())
+	{
+		if (OverlappingWeapon)
+		{
+			OverlappingWeapon->ShowPickupWidget(true);
+		}
+	}
+}
+
+void UCombatComponent::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
+{
+	if (OverlappingWeapon)
+	{
+		OverlappingWeapon->ShowPickupWidget(true);
+	}
+	if (LastWeapon)
+	{
+		LastWeapon->ShowPickupWidget(false);
 	}
 }
 
@@ -62,11 +78,11 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 
 	EquippedWeapon = WeaponToEquip;
 	EquippedWeapon->WeaponState = EWeaponState::EWS_Equipped;
-
 	// Attach the weapon mesh to the character's right hand socket
 	EquippedWeapon->WeaponMesh->AttachToComponent(
 		Character->GetMesh(),
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		TEXT("hand_rSocket"));
-}
 
+	SetOverlappingWeapon(nullptr);
+}

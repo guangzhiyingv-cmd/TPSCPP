@@ -149,4 +149,28 @@ void ATPSCPPCharacter::DoJumpEnd()
 
 void ATPSCPPCharacter::DoEquip()
 {
+	if (Combat)
+	{
+		if (HasAuthority())
+		{
+			Combat->EquipWeapon(Combat->GetOverlappingWeapon());
+		}
+		else
+		{
+			Server_EquipWeapon();
+		}
+	}
+}
+
+void ATPSCPPCharacter::Server_EquipWeapon_Implementation()
+{
+	if (Combat)
+	{
+		Combat->EquipWeapon(Combat->GetOverlappingWeapon());
+	}
+}
+
+bool ATPSCPPCharacter::Server_EquipWeapon_Validate()
+{
+	return true;
 }
