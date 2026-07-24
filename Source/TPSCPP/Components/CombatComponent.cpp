@@ -3,6 +3,7 @@
 
 #include "Components/CombatComponent.h"
 #include "TPSCPPCharacter.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
@@ -32,13 +33,14 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(UCombatComponent, OverlappingWeapon, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UCombatComponent, EquippedWeapon, COND_None);
 }
 
 void UCombatComponent::SetOverlappingWeapon(AWeapon* Weapon)
 {
 	if (OverlappingWeapon)
 	{
-		OverlappingWeapon->ShowPickupWidget(false);		//更新时隐藏之前的UI（Host）
+		OverlappingWeapon->ShowPickupWidget(false);
 	}
 	if (OverlappingWeapon != Weapon)
 	{
@@ -73,16 +75,34 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	if (EquippedWeapon)
 	{
 		EquippedWeapon->WeaponState = EWeaponState::EWS_Dropped;
+		EquippedWeapon->SetAreaSphereCollisionEnabled(true);
 		EquippedWeapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 	}
 
 	EquippedWeapon = WeaponToEquip;
 	EquippedWeapon->WeaponState = EWeaponState::EWS_Equipped;
+	EquippedWeapon->SetAreaSphereCollisionEnabled(false);
 	// Attach the weapon mesh to the character's right hand socket
 	EquippedWeapon->WeaponMesh->AttachToComponent(
-		Character->GetMesh(),
+		Character->GetCustomMesh(),
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		TEXT("hand_rSocket"));
 
 	SetOverlappingWeapon(nullptr);
+
+	// Use camera-relative rotation when weapon is equipped
+	Character->bUseControllerRotationYaw = true;
+	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+	Character->bIsEquipped = true;
+}
+
+void UCombatComponent::OnRep_EquippedWeapon()
+{
+	if (!Character) return;
+
+	if (EquippedWeapon)
+	{
+		Character->bUseControllerRotationYaw = true;
+		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
 }

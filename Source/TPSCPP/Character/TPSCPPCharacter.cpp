@@ -10,6 +10,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "TPSCPP.h"
+#include "Net/UnrealNetwork.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -29,7 +30,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	// instead of recompiling to adjust them
 	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
@@ -37,13 +38,20 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	// Create a camera boom (pulls in towards the player if there is a collision)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->TargetArmLength = NormalArmLength;
+	CameraBoom->SocketOffset = NormalSocketOffset;
 	CameraBoom->bUsePawnControlRotation = true;
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+	FollowCamera->SetFieldOfView(NormalFOV);
+
+	CameraTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CameraTimeline"));
+
+	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
+	CustomMesh->SetupAttachment(GetMesh());
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
@@ -59,6 +67,14 @@ void ATPSCPPCharacter::PostInitializeComponents()
 	if (Combat)
 	{
 		Combat->Character = this;
+	}
+
+	if (CameraCurveFloat && CameraTimeline)
+	{
+		FOnTimelineFloat ProgressUpdate;
+		ProgressUpdate.BindUFunction(this, FName("CameraTimelineUpdate"));
+		CameraTimeline->AddInterpFloat(CameraCurveFloat, ProgressUpdate);
+		CameraTimeline->SetLooping(false);
 	}
 }
 
@@ -80,6 +96,14 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 		// Equipping
 		EnhancedInputComponent->BindAction(EquipAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoEquip);
+
+		// Sprinting
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoSprintStart);
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoSprintEnd);
+
+		// Aiming
+		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoAimStart);
+		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoAimEnd);
 	}
 	else
 	{
@@ -173,4 +197,52 @@ void ATPSCPPCharacter::Server_EquipWeapon_Implementation()
 bool ATPSCPPCharacter::Server_EquipWeapon_Validate()
 {
 	return true;
+}
+
+bool ATPSCPPCharacter::HasEquippedWeapon() const
+{
+	return bIsEquipped;
+}
+
+void ATPSCPPCharacter::DoSprintStart()
+{
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+}
+
+void ATPSCPPCharacter::DoSprintEnd()
+{
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+}
+
+void ATPSCPPCharacter::DoAimStart()
+{
+	if (HasEquippedWeapon())
+	{
+		bIsAiming = true;
+		CameraTimeline->Play();
+	}
+}
+
+void ATPSCPPCharacter::DoAimEnd()
+{
+	if (HasEquippedWeapon())
+	{
+		bIsAiming = false;
+		CameraTimeline->Reverse();
+	}
+}
+
+void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
+{
+	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
+	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
+	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, AimingFOV, Value));
+}
+
+void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsAiming, COND_None);
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
 }

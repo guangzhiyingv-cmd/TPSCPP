@@ -63,7 +63,13 @@ protected:
 public:
 	void ShowPickupWidget(bool bShowWidget);
 
+	/** Enable or disable the area sphere collision. */
+	void SetAreaSphereCollisionEnabled(bool bEnabled);
+
 public:
-	UPROPERTY(VisibleAnywhere, Replicated)
+	UFUNCTION()
+	void OnRep_WeaponState();
+
+	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_WeaponState)
 	EWeaponState WeaponState;
 };

@@ -31,6 +31,11 @@ AWeapon::AWeapon()
 	PickupWidget->SetVisibility(false);
 }
 
+void AWeapon::SetAreaSphereCollisionEnabled(bool bEnabled)
+{
+	AreaSphere->SetCollisionEnabled(bEnabled ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+}
+
 void AWeapon::BeginPlay()
 {
 	Super::BeginPlay();
@@ -60,7 +65,10 @@ void AWeapon::OnSphereOverlap(
 	bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (!HasAuthority()) return;
+	if (!HasAuthority())
+	{
+		return;
+	}
 
 	if (ATPSCPPCharacter* OverlappingCharacter = Cast<ATPSCPPCharacter>(OtherActor))
 	{
@@ -93,6 +101,20 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	if (PickupWidget)
 	{
 		PickupWidget->SetVisibility(bShowWidget);
+	}
+}
+
+void AWeapon::OnRep_WeaponState()
+{
+	switch (WeaponState)
+	{
+	case EWeaponState::EWS_Equipped:
+		ShowPickupWidget(false);
+		break;
+	case EWeaponState::EWS_Dropped:
+		break;
+	default:
+		break;
 	}
 }
 
