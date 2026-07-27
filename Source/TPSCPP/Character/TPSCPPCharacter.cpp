@@ -41,6 +41,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	CameraBoom->TargetArmLength = NormalArmLength;
 	CameraBoom->SocketOffset = NormalSocketOffset;
 	CameraBoom->bUsePawnControlRotation = true;
+	CameraBoom->bDoCollisionTest = false;
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -52,6 +53,11 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
 	CustomMesh->SetupAttachment(GetMesh());
+
+	// Ignore camera channel on all character collision components to prevent camera clipping
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	CustomMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
@@ -204,35 +210,112 @@ bool ATPSCPPCharacter::HasEquippedWeapon() const
 	return bIsEquipped;
 }
 
+float ATPSCPPCharacter::GetAimPitch() const
+{
+	if (!GetController()) return 0.f;
+	return FRotator::NormalizeAxis(GetBaseAimRotation().Pitch - GetActorRotation().Pitch);
+}
+
 void ATPSCPPCharacter::DoSprintStart()
 {
+	if (bIsAiming) return;
+
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+
+	if (!HasAuthority()) Server_SprintStart();
+}
+
+void ATPSCPPCharacter::Server_SprintStart_Implementation()
+{
+	if (bIsAiming) return;
+
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+}
+
+bool ATPSCPPCharacter::Server_SprintStart_Validate()
+{
+	return true;
 }
 
 void ATPSCPPCharacter::DoSprintEnd()
 {
+	if (bIsAiming) return;
+
+	if (HasEquippedWeapon())
+	{
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bUseControllerDesiredRotation = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
+
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
+	if (!HasAuthority())
+	{
+		Server_SprintEnd();
+	}
+}
+
+void ATPSCPPCharacter::Server_SprintEnd_Implementation()
+{
+	if (bIsAiming) return;
+
+	if (HasEquippedWeapon())
+	{
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bUseControllerDesiredRotation = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
+
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
 
-void ATPSCPPCharacter::DoAimStart()
+bool ATPSCPPCharacter::Server_SprintEnd_Validate()
 {
-	if (HasEquippedWeapon())
-	{
-		bIsAiming = true;
-		CameraTimeline->Play();
-	}
+	return true;
 }
+ 
+	void ATPSCPPCharacter::DoAimStart()
+	{
+		if (HasEquippedWeapon())
+		{
+			bIsAiming = true;
+			bUseControllerRotationYaw = false;
+			GetCharacterMovement()->bUseControllerDesiredRotation = true;
+			GetCharacterMovement()->bOrientRotationToMovement = false;
+			DoSprintEnd();
+			GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+			CameraTimeline->Play();
+			if (!HasAuthority()) Server_AimStart();
+		}
+	}
 
-void ATPSCPPCharacter::DoAimEnd()
-{
-	if (HasEquippedWeapon())
+	void ATPSCPPCharacter::DoAimEnd()
 	{
 		bIsAiming = false;
-		CameraTimeline->Reverse();
+		if (HasEquippedWeapon())
+		{
+			GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+			CameraTimeline->Reverse();
+			if (!HasAuthority()) Server_AimEnd();
+		}
+		else
+		{
+			bUseControllerRotationYaw = false;
+			GetCharacterMovement()->bUseControllerDesiredRotation = false;
+			GetCharacterMovement()->bOrientRotationToMovement = true;
+			if (!HasAuthority()) Server_AimEnd();
+		}
 	}
-}
 
-void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
+	void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
 {
 	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
 	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
@@ -245,4 +328,29 @@ void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsAiming, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
+}
+
+void ATPSCPPCharacter::Server_AimStart_Implementation()
+{
+	bIsAiming = true;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+}
+
+bool ATPSCPPCharacter::Server_AimStart_Validate()
+{
+	return true;
+}
+
+void ATPSCPPCharacter::Server_AimEnd_Implementation()
+{
+	bIsAiming = false;
+	if (HasEquippedWeapon())
+	{
+		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	}
+}
+
+bool ATPSCPPCharacter::Server_AimEnd_Validate()
+{
+	return true;
 }

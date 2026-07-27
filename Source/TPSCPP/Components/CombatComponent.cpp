@@ -91,7 +91,8 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	SetOverlappingWeapon(nullptr);
 
 	// Use camera-relative rotation when weapon is equipped
-	Character->bUseControllerRotationYaw = true;
+	Character->bUseControllerRotationYaw = false;
+	Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bIsEquipped = true;
 }
@@ -102,7 +103,8 @@ void UCombatComponent::OnRep_EquippedWeapon()
 
 	if (EquippedWeapon)
 	{
-		Character->bUseControllerRotationYaw = true;
+		Character->bUseControllerRotationYaw = false;
+		Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	}
 }

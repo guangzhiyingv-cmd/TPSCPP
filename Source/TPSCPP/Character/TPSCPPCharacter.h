@@ -99,6 +99,22 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_EquipWeapon();
 
+	/** Server RPC: start sprinting (sets MaxWalkSpeed on authority). */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SprintStart();
+
+	/** Server RPC: stop sprinting (restores MaxWalkSpeed on authority). */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SprintEnd();
+
+	/** Server RPC: start aiming (sets bIsAiming and MaxWalkSpeed on authority). */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_AimStart();
+
+	/** Server RPC: stop aiming (clears bIsAiming and restores MaxWalkSpeed on authority). */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_AimEnd();
+
 protected:
 
 	/** Called for movement input */
@@ -138,6 +154,10 @@ public:
 	/** Returns true if the character currently has a weapon equipped. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool HasEquippedWeapon() const;
+
+	/** Returns the pitch angle for aim offset blending in the animation blueprint. */
+	UFUNCTION(BlueprintCallable, Category="Animation")
+	float GetAimPitch() const;
 
 	/** Handles sprint pressed input from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
