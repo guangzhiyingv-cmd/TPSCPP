@@ -155,6 +155,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool HasEquippedWeapon() const;
 
+	/** Outputs the equipped weapon's LeftHandSocket data in CustomMesh component space. */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void GetLeftHandSocketData(FTransform& OutRelativeTransform, FVector& OutXAxis, FVector& OutZAxis) const;
+
 	/** Returns the pitch angle for aim offset blending in the animation blueprint. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	float GetAimPitch() const;

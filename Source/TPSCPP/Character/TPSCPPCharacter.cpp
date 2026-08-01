@@ -41,7 +41,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	CameraBoom->TargetArmLength = NormalArmLength;
 	CameraBoom->SocketOffset = NormalSocketOffset;
 	CameraBoom->bUsePawnControlRotation = true;
-	CameraBoom->bDoCollisionTest = false;
+	CameraBoom->bDoCollisionTest = true;
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -208,6 +208,35 @@ bool ATPSCPPCharacter::Server_EquipWeapon_Validate()
 bool ATPSCPPCharacter::HasEquippedWeapon() const
 {
 	return bIsEquipped;
+}
+
+void ATPSCPPCharacter::GetLeftHandSocketData(
+	FTransform& OutRelativeTransform,
+	FVector& OutXAxis,
+	FVector& OutZAxis) const
+{
+	OutRelativeTransform = FTransform::Identity;
+	OutXAxis = FVector::ZeroVector;
+	OutZAxis = FVector::ZeroVector;
+
+	if (!Combat || !CustomMesh)
+	{
+		return;
+	}
+
+	AWeapon* Weapon = Combat->GetEquippedWeapon();
+	if (!Weapon || !Weapon->WeaponMesh)
+	{
+		return;
+	}
+
+	const FTransform SocketWorld = Weapon->WeaponMesh->GetSocketTransform(TEXT("LeftHandSocket"), RTS_World);
+	const FTransform CustomMeshWorld = CustomMesh->GetComponentTransform();
+
+	OutRelativeTransform = SocketWorld.GetRelativeTransform(CustomMeshWorld);
+
+	OutXAxis = CustomMeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisX()).GetSafeNormal();
+	OutZAxis = CustomMeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisZ()).GetSafeNormal();
 }
 
 float ATPSCPPCharacter::GetAimPitch() const

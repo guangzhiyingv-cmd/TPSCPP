@@ -26,6 +26,9 @@ public:
 	/** Get the weapon the owner is currently overlapping. */
 	AWeapon* GetOverlappingWeapon() const { return OverlappingWeapon; }
 
+	/** Get the weapon currently equipped by the owner. */
+	AWeapon* GetEquippedWeapon() const { return EquippedWeapon; }
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
