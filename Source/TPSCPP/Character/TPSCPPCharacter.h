@@ -17,6 +17,15 @@ struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+
+UENUM(BlueprintType)
+enum class EAimState : uint8
+{
+	Hipfire,
+	Shoulder,
+	ADS
+};
+
 /**
  *  A simple player-controllable third person character
  *  Implements a controllable orbiting camera
@@ -33,6 +42,10 @@ class ATPSCPPCharacter : public ACharacter
 	/** Follow camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
+
+	/** First-person camera used while aiming down sights. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UCameraComponent* FPS_Camera;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UCombatComponent* Combat;
@@ -67,9 +80,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* SprintAction;
 
-	/** Aim Input Action */
+	/** Shoulder Aim Input Action */
 	UPROPERTY(EditAnywhere, Category="Input")
-	UInputAction* AimAction;
+	UInputAction* ShoulderAimAction;
+
+	/** ADS Input Action */
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* ADSAction;
 
 public:
 
@@ -107,13 +124,9 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SprintEnd();
 
-	/** Server RPC: start aiming (sets bIsAiming and MaxWalkSpeed on authority). */
+	/** Server RPC: sync the current aim state to the server. */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_AimStart();
-
-	/** Server RPC: stop aiming (clears bIsAiming and restores MaxWalkSpeed on authority). */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_AimEnd();
+	void Server_SetAimState(EAimState NewState);
 
 protected:
 
@@ -155,6 +168,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool HasEquippedWeapon() const;
 
+	/** Returns true if the character is in either aiming state. */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	bool IsAiming() const;
+
 	/** Outputs the equipped weapon's LeftHandSocket data in CustomMesh component space. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void GetLeftHandSocketData(FTransform& OutRelativeTransform, FVector& OutXAxis, FVector& OutZAxis) const;
@@ -171,13 +188,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoSprintEnd();
 
-	/** Handles aim pressed input. */
+	/** Handles shoulder aim pressed input. */
 	UFUNCTION(BlueprintCallable, Category="Input")
-	virtual void DoAimStart();
+	virtual void DoShoulderAimStart();
 
-	/** Handles aim released input. */
+	/** Handles shoulder aim released input. */
 	UFUNCTION(BlueprintCallable, Category="Input")
-	virtual void DoAimEnd();
+	virtual void DoShoulderAimEnd();
+
+	/** Handles ADS pressed input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoADSStart();
+
+	/** Handles ADS released input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoADSEnd();
 
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
@@ -210,6 +235,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = 10, ClampMax = 160))
 	float AimingFOV = 70.f;
 
+	/** Weapon offset when attached to the first-person camera during ADS. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	FVector FPSWeaponRelativeLocation = FVector(30.f, 0.f, -20.f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	FRotator FPSWeaponRelativeRotation = FRotator::ZeroRotator;
+
+	/** Weapon start offset (bottom-right) before the ADS animation moves it to the aim position. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	FVector FPSWeaponStartLocation = FVector(100.f, 70.f, -70.f);
+
 	/** How fast the camera transitions between normal and aiming. Higher = faster. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = 0.1))
 	float CameraInterpSpeed = 8.f;
@@ -218,17 +254,29 @@ protected:
 	UPROPERTY()
 	UTimelineComponent* CameraTimeline;
 
+	/** Timeline for the ADS weapon raise animation. */
+	UPROPERTY()
+	UTimelineComponent* ADSTimeline;
+
 	/** Curve asset controlling the camera transition. Create CT_CameraTransition in Content Browser and assign here. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	UCurveFloat* CameraCurveFloat;
+
+	/** Curve asset controlling the ADS weapon raise animation. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	UCurveFloat* ADSWeaponCurveFloat;
 
 	/** Timeline progress callback: interpolates camera parameters. */
 	UFUNCTION()
 	void CameraTimelineUpdate(float Value);
 
-	/** Whether the player is currently aiming. */
+	/** Timeline progress callback for the ADS weapon animation. */
+	UFUNCTION()
+	void ADSWeaponTimelineUpdate(float Value);
+
+	/** Current aiming state. Hipfire is the base state; Shoulder and ADS cannot switch directly. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
-	bool bIsAiming = false;
+	EAimState AimState = EAimState::Hipfire;
 
 public:
 

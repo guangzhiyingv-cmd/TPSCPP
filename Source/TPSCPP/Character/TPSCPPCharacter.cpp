@@ -49,7 +49,17 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	FollowCamera->bUsePawnControlRotation = false;
 	FollowCamera->SetFieldOfView(NormalFOV);
 
+	// Create a first-person camera used while aiming down sights
+	FPS_Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("FPS_Camera"));
+	FPS_Camera->SetupAttachment(RootComponent);
+	FPS_Camera->bUsePawnControlRotation = true;
+	FPS_Camera->SetRelativeLocation(FVector(0.f, 0.f, 160.f));
+	FPS_Camera->SetFieldOfView(70.f);
+	FPS_Camera->SetAutoActivate(false);
+
 	CameraTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("CameraTimeline"));
+
+	ADSTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("ADSTimeline"));
 
 	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
 	CustomMesh->SetupAttachment(GetMesh());
@@ -82,6 +92,14 @@ void ATPSCPPCharacter::PostInitializeComponents()
 		CameraTimeline->AddInterpFloat(CameraCurveFloat, ProgressUpdate);
 		CameraTimeline->SetLooping(false);
 	}
+
+	if (ADSWeaponCurveFloat && ADSTimeline)
+	{
+		FOnTimelineFloat ADSProgress;
+		ADSProgress.BindUFunction(this, FName("ADSWeaponTimelineUpdate"));
+		ADSTimeline->AddInterpFloat(ADSWeaponCurveFloat, ADSProgress);
+		ADSTimeline->SetLooping(false);
+	}
 }
 
 void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -107,9 +125,13 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoSprintStart);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoSprintEnd);
 
-		// Aiming
-		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoAimStart);
-		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoAimEnd);
+		// Shoulder aiming
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoShoulderAimStart);
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoShoulderAimEnd);
+
+		// ADS
+		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoADSStart);
+		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoADSEnd);
 	}
 	else
 	{
@@ -207,7 +229,12 @@ bool ATPSCPPCharacter::Server_EquipWeapon_Validate()
 
 bool ATPSCPPCharacter::HasEquippedWeapon() const
 {
-	return bIsEquipped;
+	return Combat && Combat->GetEquippedWeapon() != nullptr;
+}
+
+bool ATPSCPPCharacter::IsAiming() const
+{
+	return AimState != EAimState::Hipfire;
 }
 
 void ATPSCPPCharacter::GetLeftHandSocketData(
@@ -241,13 +268,13 @@ void ATPSCPPCharacter::GetLeftHandSocketData(
 
 float ATPSCPPCharacter::GetAimPitch() const
 {
-	if (!GetController()) return 0.f;
+	//if (!GetController()) return 0.f;
 	return FRotator::NormalizeAxis(GetBaseAimRotation().Pitch - GetActorRotation().Pitch);
 }
 
 void ATPSCPPCharacter::DoSprintStart()
 {
-	if (bIsAiming) return;
+	if (AimState != EAimState::Hipfire) return;
 
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
@@ -259,7 +286,7 @@ void ATPSCPPCharacter::DoSprintStart()
 
 void ATPSCPPCharacter::Server_SprintStart_Implementation()
 {
-	if (bIsAiming) return;
+	if (AimState != EAimState::Hipfire) return;
 
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
@@ -275,7 +302,7 @@ bool ATPSCPPCharacter::Server_SprintStart_Validate()
 
 void ATPSCPPCharacter::DoSprintEnd()
 {
-	if (bIsAiming) return;
+	if (AimState != EAimState::Hipfire) return;
 
 	if (HasEquippedWeapon())
 	{
@@ -294,7 +321,7 @@ void ATPSCPPCharacter::DoSprintEnd()
 
 void ATPSCPPCharacter::Server_SprintEnd_Implementation()
 {
-	if (bIsAiming) return;
+	if (AimState != EAimState::Hipfire) return;
 
 	if (HasEquippedWeapon())
 	{
@@ -311,75 +338,187 @@ bool ATPSCPPCharacter::Server_SprintEnd_Validate()
 	return true;
 }
  
-	void ATPSCPPCharacter::DoAimStart()
+	void ATPSCPPCharacter::DoShoulderAimStart()
+{
+	if (AimState != EAimState::Hipfire || !HasEquippedWeapon())
 	{
-		if (HasEquippedWeapon())
+		return;
+	}
+
+	AimState = EAimState::Shoulder;
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	DoSprintEnd();
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+	CameraTimeline->Play();
+	if (!HasAuthority())
+	{
+		Server_SetAimState(EAimState::Shoulder);
+	}
+}
+
+void ATPSCPPCharacter::DoShoulderAimEnd()
+{
+	if (AimState != EAimState::Shoulder)
+	{
+		return;
+	}
+
+	AimState = EAimState::Hipfire;
+	if (HasEquippedWeapon())
+	{
+		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+		CameraTimeline->Reverse();
+		if (!HasAuthority())
 		{
-			bIsAiming = true;
-			bUseControllerRotationYaw = false;
-			GetCharacterMovement()->bUseControllerDesiredRotation = true;
-			GetCharacterMovement()->bOrientRotationToMovement = false;
-			DoSprintEnd();
-			GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
-			CameraTimeline->Play();
-			if (!HasAuthority()) Server_AimStart();
+			Server_SetAimState(EAimState::Hipfire);
+		}
+	}
+	else
+	{
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bUseControllerDesiredRotation = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+		if (!HasAuthority())
+		{
+			Server_SetAimState(EAimState::Hipfire);
+		}
+	}
+}
+
+void ATPSCPPCharacter::DoADSStart()
+{
+	if (AimState != EAimState::Hipfire || !HasEquippedWeapon())
+	{
+		return;
+	}
+
+	AimState = EAimState::ADS;
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	DoSprintEnd();
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+
+	FollowCamera->SetActive(false);
+	FPS_Camera->SetActive(true);
+
+	if (IsLocallyControlled())
+	{
+		CustomMesh->SetVisibility(false);
+
+		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+		{
+			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+			Weapon->WeaponMesh->AttachToComponent(
+				FPS_Camera,
+				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+				NAME_None);
+			Weapon->WeaponMesh->SetRelativeLocation(FPSWeaponStartLocation);
+			Weapon->WeaponMesh->SetRelativeRotation(FPSWeaponRelativeRotation);
+
+			ADSTimeline->PlayFromStart();
 		}
 	}
 
-	void ATPSCPPCharacter::DoAimEnd()
+	if (!HasAuthority())
 	{
-		bIsAiming = false;
-		if (HasEquippedWeapon())
+		Server_SetAimState(EAimState::ADS);
+	}
+}
+
+void ATPSCPPCharacter::DoADSEnd()
+{
+	if (AimState != EAimState::ADS)
+	{
+		return;
+	}
+
+	AimState = EAimState::Hipfire;
+	FPS_Camera->SetActive(false);
+	FollowCamera->SetActive(true);
+
+	if (IsLocallyControlled())
+	{
+		CustomMesh->SetVisibility(true);
+
+		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
-			GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
-			CameraTimeline->Reverse();
-			if (!HasAuthority()) Server_AimEnd();
-		}
-		else
-		{
-			bUseControllerRotationYaw = false;
-			GetCharacterMovement()->bUseControllerDesiredRotation = false;
-			GetCharacterMovement()->bOrientRotationToMovement = true;
-			if (!HasAuthority()) Server_AimEnd();
+			ADSTimeline->Stop();
+			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+			Weapon->WeaponMesh->AttachToComponent(
+				CustomMesh,
+				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+				TEXT("hand_rSocket"));
 		}
 	}
 
-	void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
+	if (HasEquippedWeapon())
+	{
+		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	}
+	else
+	{
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bUseControllerDesiredRotation = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
+
+	if (!HasAuthority())
+	{
+		Server_SetAimState(EAimState::Hipfire);
+	}
+}	void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
 {
 	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
 	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
 	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, AimingFOV, Value));
 }
 
+void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
+{
+	if (Combat)
+	{
+		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+		{
+			Weapon->WeaponMesh->SetRelativeLocation(
+				FMath::Lerp(FPSWeaponStartLocation, FPSWeaponRelativeLocation, Value));
+		}
+	}
+}
+
 void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsAiming, COND_None);
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
 }
 
-void ATPSCPPCharacter::Server_AimStart_Implementation()
+void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 {
-	bIsAiming = true;
-	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
-}
+	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
+	{
+		if (AimState != EAimState::Hipfire)
+		{
+			return;
+		}
+	}
 
-bool ATPSCPPCharacter::Server_AimStart_Validate()
-{
-	return true;
-}
+	AimState = NewState;
 
-void ATPSCPPCharacter::Server_AimEnd_Implementation()
-{
-	bIsAiming = false;
-	if (HasEquippedWeapon())
+	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+	}
+	else
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	}
 }
 
-bool ATPSCPPCharacter::Server_AimEnd_Validate()
+bool ATPSCPPCharacter::Server_SetAimState_Validate(EAimState NewState)
 {
 	return true;
 }
