@@ -91,6 +91,10 @@ void ATPSCPPCharacter::PostInitializeComponents()
 		ProgressUpdate.BindUFunction(this, FName("CameraTimelineUpdate"));
 		CameraTimeline->AddInterpFloat(CameraCurveFloat, ProgressUpdate);
 		CameraTimeline->SetLooping(false);
+
+		FOnTimelineEvent Finished;
+		Finished.BindUFunction(this, FName("CameraTimelineFinished"));
+		CameraTimeline->SetTimelineFinishedFunc(Finished);
 	}
 
 	if (ADSWeaponCurveFloat && ADSTimeline)
@@ -181,9 +185,18 @@ void ATPSCPPCharacter::DoLook(float Yaw, float Pitch)
 {
 	if (GetController() != nullptr)
 	{
-		// add yaw and pitch input to controller
-		AddControllerYawInput(Yaw);
-		AddControllerPitchInput(Pitch);
+		float Sensitivity = 1.f;
+		if (AimState == EAimState::Shoulder)
+		{
+			Sensitivity = ShoulderSensitivity;
+		}
+		else if (AimState == EAimState::ADS)
+		{
+			Sensitivity = ADSSensitivity;
+		}
+
+		AddControllerYawInput(Yaw * Sensitivity);
+		AddControllerPitchInput(Pitch * Sensitivity);
 	}
 }
 
@@ -351,6 +364,7 @@ bool ATPSCPPCharacter::Server_SprintEnd_Validate()
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 	DoSprintEnd();
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+	CameraTimeline->SetPlayRate(1.f);
 	CameraTimeline->Play();
 	if (!HasAuthority())
 	{
@@ -369,6 +383,7 @@ void ATPSCPPCharacter::DoShoulderAimEnd()
 	if (HasEquippedWeapon())
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+		CameraTimeline->SetPlayRate(1.f);
 		CameraTimeline->Reverse();
 		if (!HasAuthority())
 		{
@@ -395,32 +410,15 @@ void ATPSCPPCharacter::DoADSStart()
 	}
 
 	AimState = EAimState::ADS;
+	bPendingADS = true;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 	DoSprintEnd();
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
 
-	FollowCamera->SetActive(false);
-	FPS_Camera->SetActive(true);
-
-	if (IsLocallyControlled())
-	{
-		CustomMesh->SetVisibility(false);
-
-		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
-		{
-			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-			Weapon->WeaponMesh->AttachToComponent(
-				FPS_Camera,
-				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-				NAME_None);
-			Weapon->WeaponMesh->SetRelativeLocation(FPSWeaponStartLocation);
-			Weapon->WeaponMesh->SetRelativeRotation(FPSWeaponRelativeRotation);
-
-			ADSTimeline->PlayFromStart();
-		}
-	}
+	CameraTimeline->SetPlayRate(2.f);
+	CameraTimeline->PlayFromStart();
 
 	if (!HasAuthority())
 	{
@@ -436,6 +434,7 @@ void ATPSCPPCharacter::DoADSEnd()
 	}
 
 	AimState = EAimState::Hipfire;
+	bPendingADS = false;
 	FPS_Camera->SetActive(false);
 	FollowCamera->SetActive(true);
 
@@ -452,6 +451,9 @@ void ATPSCPPCharacter::DoADSEnd()
 				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 				TEXT("hand_rSocket"));
 		}
+
+		CameraTimeline->SetPlayRate(2.f);
+		CameraTimeline->Reverse();
 	}
 
 	if (HasEquippedWeapon())
@@ -474,6 +476,29 @@ void ATPSCPPCharacter::DoADSEnd()
 	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
 	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
 	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, AimingFOV, Value));
+}
+
+void ATPSCPPCharacter::CameraTimelineFinished()
+{
+	if (AimState == EAimState::ADS && bPendingADS && IsLocallyControlled())
+	{
+		bPendingADS = false;
+		FollowCamera->SetActive(false);
+		FPS_Camera->SetActive(true);
+		CustomMesh->SetVisibility(false);
+
+		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+		{
+			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+			Weapon->WeaponMesh->AttachToComponent(
+				FPS_Camera,
+				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+				NAME_None);
+			Weapon->WeaponMesh->SetRelativeLocation(FPSWeaponStartLocation);
+			Weapon->WeaponMesh->SetRelativeRotation(FPSWeaponRelativeRotation);
+			ADSTimeline->PlayFromStart();
+		}
+	}
 }
 
 void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)

@@ -270,6 +270,10 @@ protected:
 	UFUNCTION()
 	void CameraTimelineUpdate(float Value);
 
+	/** Called when the camera timeline finishes. */
+	UFUNCTION()
+	void CameraTimelineFinished();
+
 	/** Timeline progress callback for the ADS weapon animation. */
 	UFUNCTION()
 	void ADSWeaponTimelineUpdate(float Value);
@@ -277,6 +281,18 @@ protected:
 	/** Current aiming state. Hipfire is the base state; Shoulder and ADS cannot switch directly. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
 	EAimState AimState = EAimState::Hipfire;
+
+	/** Mouse/aim look sensitivity multiplier while shoulder aiming. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
+	float ShoulderSensitivity = 1.f;
+
+	/** Mouse/aim look sensitivity multiplier while aiming down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
+	float ADSSensitivity = 0.5f;
+
+	/** Pending ADS camera sequence flag: shoulder animation first, then switch to FPS camera. */
+	UPROPERTY()
+	bool bPendingADS = false;
 
 public:
 
