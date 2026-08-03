@@ -36,6 +36,11 @@
 			"Enabled": true
 		},
 		{
+			"Name": "SPCRJointDynamics",
+			"Enabled": true,
+			"MarketplaceURL": "SPCRJointDynamics : Cloth-like bone physics for UnrealEngine"
+		},
+		{
 			"Name": "VisualStudioTools",
 			"Enabled": true,
 			"SupportedTargetPlatforms": [

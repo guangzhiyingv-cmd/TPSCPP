@@ -54,6 +54,10 @@ class ATPSCPPCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* CustomMesh;
 
+	/** Local-only weapon view model shown on the first-person camera during ADS. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* ViewModelWeapon;
+
 protected:
 
 	/** Jump Input Action */
@@ -203,6 +207,10 @@ public:
 	/** Handles ADS released input. */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoADSEnd();
+
+	/** Handles ADS toggle input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	void DoADSToggle();
 
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")

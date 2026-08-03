@@ -64,6 +64,12 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
 	CustomMesh->SetupAttachment(GetMesh());
 
+	ViewModelWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ViewModelWeapon"));
+	ViewModelWeapon->SetupAttachment(FPS_Camera);
+	ViewModelWeapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ViewModelWeapon->SetCastShadow(false);
+	ViewModelWeapon->SetVisibility(false);
+
 	// Ignore camera channel on all character collision components to prevent camera clipping
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -133,9 +139,8 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoShoulderAimStart);
 		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoShoulderAimEnd);
 
-		// ADS
-		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoADSStart);
-		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoADSEnd);
+		// ADS toggle
+		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoADSToggle);
 	}
 	else
 	{
@@ -426,6 +431,18 @@ void ATPSCPPCharacter::DoADSStart()
 	}
 }
 
+void ATPSCPPCharacter::DoADSToggle()
+{
+	if (AimState == EAimState::ADS)
+	{
+		DoADSEnd();
+	}
+	else
+	{
+		DoADSStart();
+	}
+}
+
 void ATPSCPPCharacter::DoADSEnd()
 {
 	if (AimState != EAimState::ADS)
@@ -444,13 +461,15 @@ void ATPSCPPCharacter::DoADSEnd()
 
 		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
-			ADSTimeline->Stop();
-			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-			Weapon->WeaponMesh->AttachToComponent(
-				CustomMesh,
-				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-				TEXT("hand_rSocket"));
+			Weapon->WeaponMesh->SetVisibility(true);
 		}
+
+		if (ViewModelWeapon)
+		{
+			ViewModelWeapon->SetVisibility(false);
+		}
+
+		ADSTimeline->Stop();
 
 		CameraTimeline->SetPlayRate(2.f);
 		CameraTimeline->Reverse();
@@ -489,13 +508,16 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 
 		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
-			Weapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-			Weapon->WeaponMesh->AttachToComponent(
-				FPS_Camera,
-				FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-				NAME_None);
-			Weapon->WeaponMesh->SetRelativeLocation(FPSWeaponStartLocation);
-			Weapon->WeaponMesh->SetRelativeRotation(FPSWeaponRelativeRotation);
+			Weapon->WeaponMesh->SetVisibility(false);
+
+			if (ViewModelWeapon)
+			{
+				ViewModelWeapon->SetSkeletalMeshAsset(Weapon->WeaponMesh->GetSkeletalMeshAsset());
+				ViewModelWeapon->SetRelativeLocation(FPSWeaponStartLocation);
+				ViewModelWeapon->SetRelativeRotation(FPSWeaponRelativeRotation);
+				ViewModelWeapon->SetVisibility(true);
+			}
+
 			ADSTimeline->PlayFromStart();
 		}
 	}
@@ -503,13 +525,10 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 
 void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
 {
-	if (Combat)
+	if (ViewModelWeapon)
 	{
-		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
-		{
-			Weapon->WeaponMesh->SetRelativeLocation(
-				FMath::Lerp(FPSWeaponStartLocation, FPSWeaponRelativeLocation, Value));
-		}
+		ViewModelWeapon->SetRelativeLocation(
+			FMath::Lerp(FPSWeaponStartLocation, FPSWeaponRelativeLocation, Value));
 	}
 }
 
@@ -536,6 +555,8 @@ void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
+		GetCharacterMovement()->bUseControllerDesiredRotation = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
 	}
 	else
 	{
