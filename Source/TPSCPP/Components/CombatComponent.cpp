@@ -108,3 +108,13 @@ void UCombatComponent::OnRep_EquippedWeapon()
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	}
 }
+
+void UCombatComponent::FireButtonPressed(bool bPressed)
+{
+	bFireButtonPressed = bPressed;
+
+	if (Character)
+	{
+		Character->PlayFireMontage(bPressed);
+	}
+}

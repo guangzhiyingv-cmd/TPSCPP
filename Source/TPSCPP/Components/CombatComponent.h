@@ -46,6 +46,9 @@ private:
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
 
+	void FireButtonPressed(bool bPressed);
+	bool bFireButtonPressed;
+
 	/** Replicated only to the owning client when it changes. */
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	AWeapon* OverlappingWeapon;

@@ -13,6 +13,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
+class UAnimMontage;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -91,6 +92,10 @@ protected:
 	/** ADS Input Action */
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* ADSAction;
+
+	/** Fire Input Action */
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* FireAction;
 
 public:
 
@@ -212,6 +217,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoADSToggle();
 
+	/** Handles fire pressed input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoFirePressed();
+
+	/** Handles fire released input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoFireReleased();
+
+	/** Plays or stops the fire montage on the character mesh. */
+	UFUNCTION(BlueprintCallable, Category="Animation")
+	void PlayFireMontage(bool bPlay);
+
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float WalkSpeed = 500.f;
@@ -297,6 +314,10 @@ protected:
 	/** Mouse/aim look sensitivity multiplier while aiming down sights. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
 	float ADSSensitivity = 0.5f;
+
+	/** Montage played when firing. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	UAnimMontage* FireMontage;
 
 	/** Pending ADS camera sequence flag: shoulder animation first, then switch to FPS camera. */
 	UPROPERTY()

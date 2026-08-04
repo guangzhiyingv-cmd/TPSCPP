@@ -11,6 +11,7 @@
 #include "InputActionValue.h"
 #include "TPSCPP.h"
 #include "Net/UnrealNetwork.h"
+#include "Animation/AnimInstance.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -141,6 +142,10 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 		// ADS toggle
 		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoADSToggle);
+
+		// Firing
+		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoFirePressed);
+		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoFireReleased);
 	}
 	else
 	{
@@ -440,6 +445,42 @@ void ATPSCPPCharacter::DoADSToggle()
 	else
 	{
 		DoADSStart();
+	}
+}
+
+void ATPSCPPCharacter::DoFirePressed()
+{
+	if (Combat && HasEquippedWeapon())
+	{
+		Combat->FireButtonPressed(true);
+	}
+}
+
+void ATPSCPPCharacter::DoFireReleased()
+{
+	if (Combat && HasEquippedWeapon())
+	{
+		Combat->FireButtonPressed(false);
+	}
+}
+
+void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
+{
+	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
+
+	if (bPlay)
+	{
+		if (FireMontage)
+		{
+			GetMesh()->GetAnimInstance()->Montage_Play(FireMontage);
+		}
+	}
+	else
+	{
+		if (FireMontage)
+		{
+			GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, FireMontage);
+		}
 	}
 }
 
