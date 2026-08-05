@@ -181,6 +181,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool IsAiming() const;
 
+	/** Returns the current aim state. */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	EAimState GetAimState() const { return AimState; }
+
+	/** Returns the first-person view model weapon. */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	USkeletalMeshComponent* GetViewModelWeapon() const { return ViewModelWeapon; }
+
 	/** Outputs the equipped weapon's LeftHandSocket data in CustomMesh component space. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void GetLeftHandSocketData(FTransform& OutRelativeTransform, FVector& OutXAxis, FVector& OutZAxis) const;
@@ -235,6 +243,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float SprintSpeed = 1000.f;
+
+	/** Whether the character is currently sprinting. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Movement")
+	bool bIsSprinting = false;
 
 	/** Normal (hip-fire) camera: arm length. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = 50))

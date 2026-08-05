@@ -104,6 +104,37 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	}
 }
 
+void AWeapon::Fire(bool bPlay)
+{
+	USkeletalMeshComponent* TargetMesh = WeaponMesh;
+
+	// ADS: play on the first-person view model instead of the third-person mesh
+	if (ATPSCPPCharacter* OwnerCharacter = Cast<ATPSCPPCharacter>(GetOwner()))
+	{
+		if (OwnerCharacter->IsLocallyControlled() && OwnerCharacter->GetAimState() == EAimState::ADS)
+		{
+			if (USkeletalMeshComponent* ViewModel = OwnerCharacter->GetViewModelWeapon())
+			{
+				TargetMesh = ViewModel;
+			}
+		}
+	}
+
+	if (!TargetMesh) return;
+
+	if (bPlay)
+	{
+		if (FireAnim)
+		{
+			TargetMesh->PlayAnimation(FireAnim, false);
+		}
+	}
+	else
+	{
+		TargetMesh->Stop();
+	}
+}
+
 void AWeapon::OnRep_WeaponState()
 {
 	switch (WeaponState)

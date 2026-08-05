@@ -299,6 +299,13 @@ void ATPSCPPCharacter::DoSprintStart()
 {
 	if (AimState != EAimState::Hipfire) return;
 
+	// Cancel firing if the fire button is held while sprinting
+	if (Combat && Combat->bFireButtonPressed)
+	{
+		Combat->FireButtonPressed(false);
+	}
+
+	bIsSprinting = true;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -311,6 +318,7 @@ void ATPSCPPCharacter::Server_SprintStart_Implementation()
 {
 	if (AimState != EAimState::Hipfire) return;
 
+	bIsSprinting = true;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -327,6 +335,7 @@ void ATPSCPPCharacter::DoSprintEnd()
 {
 	if (AimState != EAimState::Hipfire) return;
 
+	bIsSprinting = false;
 	if (HasEquippedWeapon())
 	{
 		bUseControllerRotationYaw = false;
@@ -346,6 +355,7 @@ void ATPSCPPCharacter::Server_SprintEnd_Implementation()
 {
 	if (AimState != EAimState::Hipfire) return;
 
+	bIsSprinting = false;
 	if (HasEquippedWeapon())
 	{
 		bUseControllerRotationYaw = false;
@@ -450,6 +460,12 @@ void ATPSCPPCharacter::DoADSToggle()
 
 void ATPSCPPCharacter::DoFirePressed()
 {
+	// Cancel sprinting before firing
+	if (bIsSprinting)
+	{
+		DoSprintEnd();
+	}
+
 	if (Combat && HasEquippedWeapon())
 	{
 		Combat->FireButtonPressed(true);

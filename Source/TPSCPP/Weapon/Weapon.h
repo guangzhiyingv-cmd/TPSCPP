@@ -66,10 +66,18 @@ public:
 	/** Enable or disable the area sphere collision. */
 	void SetAreaSphereCollisionEnabled(bool bEnabled);
 
+	/** Plays or stops the fire montage on the weapon mesh. */
+	UFUNCTION(BlueprintCallable, Category="Animation")
+	void Fire(bool bPlay);
+
 public:
 	UFUNCTION()
 	void OnRep_WeaponState();
 
 	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_WeaponState)
 	EWeaponState WeaponState;
+
+	/** Montage played when the weapon fires. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation")
+	class UAnimationAsset* FireAnim;
 };

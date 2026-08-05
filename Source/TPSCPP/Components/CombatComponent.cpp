@@ -1,23 +1,14 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "Components/CombatComponent.h"
 #include "TPSCPPCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 
-// Sets default values for this component's properties
 UCombatComponent::UCombatComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
-
-	// ...
 }
 
 
-// Called when the game starts
 void UCombatComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -35,6 +26,11 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME_CONDITION(UCombatComponent, OverlappingWeapon, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UCombatComponent, EquippedWeapon, COND_None);
 }
+
+
+//*****Overlap&EquipWeapon*****//
+
+
 
 void UCombatComponent::SetOverlappingWeapon(AWeapon* Weapon)
 {
@@ -80,6 +76,7 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	}
 
 	EquippedWeapon = WeaponToEquip;
+	EquippedWeapon->SetOwner(Character);
 	EquippedWeapon->WeaponState = EWeaponState::EWS_Equipped;
 	EquippedWeapon->SetAreaSphereCollisionEnabled(false);
 	// Attach the weapon mesh to the character's right hand socket
@@ -109,12 +106,29 @@ void UCombatComponent::OnRep_EquippedWeapon()
 	}
 }
 
+
+
+//*****Fire*****//
+
+
+
 void UCombatComponent::FireButtonPressed(bool bPressed)
 {
 	bFireButtonPressed = bPressed;
+	ServerFire(bPressed);
+}
 
+void UCombatComponent::MulticastFire_Implementation(bool bPressed)
+{
+	if (!EquippedWeapon) return;
 	if (Character)
 	{
+		EquippedWeapon->Fire(bPressed);
 		Character->PlayFireMontage(bPressed);
 	}
+}
+
+void UCombatComponent::ServerFire_Implementation(bool bPressed)
+{
+	MulticastFire(bPressed);
 }

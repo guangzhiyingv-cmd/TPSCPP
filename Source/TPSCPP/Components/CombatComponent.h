@@ -49,6 +49,12 @@ private:
 	void FireButtonPressed(bool bPressed);
 	bool bFireButtonPressed;
 
+	UFUNCTION(Server,Reliable)
+	void ServerFire(bool bPressed);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastFire(bool bPressed);
+
 	/** Replicated only to the owning client when it changes. */
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	AWeapon* OverlappingWeapon;
