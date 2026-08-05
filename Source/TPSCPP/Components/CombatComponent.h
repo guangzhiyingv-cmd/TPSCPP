@@ -5,7 +5,10 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Weapon/Weapon.h"
+#include "Engine/NetSerialization.h"
 #include "CombatComponent.generated.h"
+
+#define TRACE_LENGTH 80000.f
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -50,14 +53,18 @@ private:
 	bool bFireButtonPressed;
 
 	UFUNCTION(Server,Reliable)
-	void ServerFire(bool bPressed);
+	void ServerFire(bool bPressed, const FVector_NetQuantize& InHitTarget);
 
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastFire(bool bPressed);
+	void MulticastFire(bool bPressed, const FVector_NetQuantize& InHitTarget);
+
+	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 
 	/** Replicated only to the owning client when it changes. */
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	AWeapon* OverlappingWeapon;
+
+	FVector_NetQuantize HitTarget;
 
 	UFUNCTION()
 	void OnRep_OverlappingWeapon(AWeapon* LastWeapon);

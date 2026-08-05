@@ -68,7 +68,7 @@ public:
 
 	/** Plays or stops the fire montage on the weapon mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
-	void Fire(bool bPlay);
+	virtual void Fire(bool bPlay,const FVector& HitTarget);
 
 public:
 	UFUNCTION()
@@ -80,4 +80,14 @@ public:
 	/** Montage played when the weapon fires. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation")
 	class UAnimationAsset* FireAnim;
+
+	/** Casing actor class ejected when the weapon fires. */
+	UPROPERTY(EditAnywhere, Category = "Weapon")
+	TSubclassOf<class ACasing> CasingClass;
+
+	/** Impulse applied to the ejected casing along the AmmoEject socket +X axis. */
+	UPROPERTY(EditAnywhere, Category = "Weapon", meta = (ClampMin = 0))
+	float EjectImpulseStrength = 500.f;
+
+	FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
 };

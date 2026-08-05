@@ -5,6 +5,8 @@
 #include "GameFramework/Character.h"
 #include "TPSCPPCharacter.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/SkeletalMeshSocket.h"
+#include "Weapon/Casing.h"
 
 AWeapon::AWeapon()
 {
@@ -104,7 +106,7 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	}
 }
 
-void AWeapon::Fire(bool bPlay)
+void AWeapon::Fire(bool bPlay, const FVector& HitTarget)
 {
 	USkeletalMeshComponent* TargetMesh = WeaponMesh;
 
@@ -132,6 +134,25 @@ void AWeapon::Fire(bool bPlay)
 	else
 	{
 		TargetMesh->Stop();
+	}
+
+	// Spawn and eject a casing at the AmmoEject socket when firing
+	if (bPlay && CasingClass && WeaponMesh)
+	{
+		const USkeletalMeshSocket* AmmoEjectSocket = WeaponMesh->GetSocketByName(FName("AmmoEject"));
+		if (AmmoEjectSocket)
+		{
+			FTransform SocketTransform = AmmoEjectSocket->GetSocketTransform(WeaponMesh);
+			ACasing* SpawnedCasing = GetWorld()->SpawnActor<ACasing>(
+				CasingClass,
+				SocketTransform.GetLocation(),
+				SocketTransform.GetRotation().Rotator());
+			if (SpawnedCasing)
+			{
+				SpawnedCasing->GetCasingMesh()->AddImpulse(
+					SocketTransform.GetRotation().GetAxisX() * EjectImpulseStrength);
+			}
+		}
 	}
 }
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Weapon/Weapon.h"
+#include "Weapon/Projectile.h"
 #include "ProjectileWeapon.generated.h"
 
 /**
@@ -13,5 +14,11 @@ UCLASS()
 class TPSCPP_API AProjectileWeapon : public AWeapon
 {
 	GENERATED_BODY()
+
+public:
+	virtual void Fire(bool bPlay, const FVector& HitTarget) override;
 	
+private:
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<AProjectile> ProjectileClass;
 };
