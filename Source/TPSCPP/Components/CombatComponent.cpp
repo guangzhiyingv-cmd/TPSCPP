@@ -1,5 +1,8 @@
 #include "Components/CombatComponent.h"
-#include "TPSCPPCharacter.h"
+#include "Character/TPSCPPCharacter.h"
+#include "TPSCPPPlayerController.h"
+#include "HUD/PlayerHUD.h"
+#include "TPSCPP.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
@@ -7,7 +10,7 @@
 
 UCombatComponent::UCombatComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 }
 
 
@@ -16,10 +19,13 @@ void UCombatComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
+
+
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	SetHUDCrosshairs(DeltaTime);
 }
 
 void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -154,23 +160,136 @@ void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
 		CrosshairLocation,
 		CrosshairWorldPosition,
 		CrosshairWorldDirection
-	);
-	if (bScreenToWorld)
-	{
-		FVector Start = CrosshairWorldPosition;
-		FVector End = Start + CrosshairWorldDirection * TRACE_LENGTH;
-		GetWorld()->LineTraceSingleByChannel(TraceHitResult,Start,End,ECollisionChannel::ECC_Visibility);
+  	);
+  	if (bScreenToWorld)
+  	{
+  		// Start the trace at the character's position along the crosshair direction
+  		// to avoid picking hit points between the camera and the pawn
+  		float CameraToCharacterDistance = FVector::Dist(CrosshairWorldPosition, Character->GetActorLocation()) + 25.f;
+  		FVector Start = CrosshairWorldPosition + CrosshairWorldDirection * CameraToCharacterDistance;
+  		FVector End = CrosshairWorldPosition + CrosshairWorldDirection * TRACE_LENGTH;
 
-		if (!TraceHitResult.bBlockingHit)
+  		// Trace multiple channels and keep the closest hit
+  		FHitResult VisibilityHit;
+  		FHitResult SkeletalHit;
+  		bool bVisHit = GetWorld()->LineTraceSingleByChannel(VisibilityHit, Start, End, ECC_Visibility);
+  		bool bSkelHit = GetWorld()->LineTraceSingleByChannel(SkeletalHit, Start, End, ECC_SkeletalMesh);
+
+  		const FHitResult* ClosestHit = nullptr;
+  		if (bVisHit && bSkelHit)
+  		{
+  			ClosestHit = (VisibilityHit.ImpactPoint - Start).SizeSquared() < (SkeletalHit.ImpactPoint - Start).SizeSquared()
+  				? &VisibilityHit : &SkeletalHit;
+  		}
+  		else if (bVisHit)
+  		{
+  			ClosestHit = &VisibilityHit;
+  		}
+  		else if (bSkelHit)
+  		{
+  			ClosestHit = &SkeletalHit;
+  		}
+
+  		if (ClosestHit)
+  		{
+  			TraceHitResult = *ClosestHit;
+  			HitTarget = ClosestHit->ImpactPoint;
+  			DrawDebugSphere(GetWorld(), ClosestHit->ImpactPoint, 12.f, 12, FColor::Red);
+  		}
+  		else
+  		{
+  			TraceHitResult.ImpactPoint = End;
+  			HitTarget = End;
+  		}
+  	}
+	
+}
+
+
+
+
+//*****Player HUD*****//
+
+
+
+void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
+{
+	if (Character == nullptr || Character->Controller == nullptr) return;
+
+	Controller = Controller == nullptr ? Cast<ATPSCPPPlayerController>(Character->Controller) : Controller;
+	if (Controller)
+	{
+		HUD = HUD == nullptr ? Cast<APlayerHUD>(Controller->GetHUD()) : HUD;
+		if (HUD)
 		{
-			TraceHitResult.ImpactPoint = End;
-			HitTarget = End;
-		}
-		else
-		{
-			HitTarget = TraceHitResult.ImpactPoint;
-			DrawDebugSphere(GetWorld(), TraceHitResult.ImpactPoint,12.f,12,FColor::Red);
+			FHUDPackage HUDPackage;
+			if (EquippedWeapon && Character->GetAimState() != EAimState::ADS)
+			{
+				HUDPackage.CrosshairCenter = EquippedWeapon->CrosshairsCenter;
+				HUDPackage.CrosshairLeft = EquippedWeapon->CrosshairsLeft;
+				HUDPackage.CrosshairRight = EquippedWeapon->CrosshairsRight;
+				HUDPackage.CrosshairTop = EquippedWeapon->CrosshairsTop;
+				HUDPackage.CrosshairBottom = EquippedWeapon->CrosshairsBottom;
+			}
+			else
+			{
+				HUDPackage.CrosshairCenter = nullptr;
+				HUDPackage.CrosshairLeft = nullptr;
+				HUDPackage.CrosshairRight = nullptr;
+				HUDPackage.CrosshairTop = nullptr;
+				HUDPackage.CrosshairBottom = nullptr;
+			}
+
+			// Crosshair spread grows with movement speed and narrows while aiming
+			// Ground speed (ignore Z axis) so slopes and vertical movement do not widen the crosshair
+			FVector CharacterVelocity = Character->GetVelocity();
+			CharacterVelocity.Z = 0.f;
+			float Spread = CharacterVelocity.Size() * VelocitySpreadMultiplier;
+
+			// Airborne spread: smoothly ramp to the bonus while in the air and recover to 0 after landing
+			if (!Character->GetCharacterMovement()->IsMovingOnGround())
+			{
+				AirborneSpread = FMath::FInterpTo(AirborneSpread, AirborneSpreadBonus, DeltaTime, SpreadInterpSpeed);
+			}
+			else
+			{
+				AirborneSpread = FMath::FInterpTo(AirborneSpread, 0.f, DeltaTime, SpreadInterpSpeed);
+			}
+			Spread += AirborneSpread;
+
+			// Aim reduction: interpolate toward the target reduction for the current aim state
+			float TargetAimReduction = 0.f;
+			switch (Character->GetAimState())
+			{
+			case EAimState::Shoulder:
+				TargetAimReduction = ShoulderAimSpreadReduction;
+				break;
+			case EAimState::ADS:
+				TargetAimReduction = ADSAimSpreadReduction;
+				break;
+			default:
+				break;
+			}
+			AimSpreadReduction = FMath::FInterpTo(AimSpreadReduction, TargetAimReduction, DeltaTime, SpreadInterpSpeed);
+			Spread -= AimSpreadReduction;
+
+			// Final per-state minimum clamp; ADS is intentionally unclamped
+			switch (Character->GetAimState())
+			{
+			case EAimState::Hipfire:
+				Spread = FMath::Max(Spread, HipfireMinSpread);
+				break;
+			case EAimState::Shoulder:
+				Spread = FMath::Max(Spread, ShoulderMinSpread);
+				break;
+			case EAimState::ADS:
+				break;
+			default:
+				break;
+			}
+			HUDPackage.CrosshairSpread = FMath::Max(Spread, 0.f);
+
+			HUD->SetHUDPackage(HUDPackage);
 		}
 	}
-	
 }

@@ -67,8 +67,8 @@ public:
 	void SetAreaSphereCollisionEnabled(bool bEnabled);
 
 	/** Plays or stops the fire montage on the weapon mesh. */
-	UFUNCTION(BlueprintCallable, Category="Animation")
-	virtual void Fire(bool bPlay,const FVector& HitTarget);
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	virtual void Fire(bool bPlay, const FVector& HitTarget);
 
 public:
 	UFUNCTION()
@@ -78,7 +78,7 @@ public:
 	EWeaponState WeaponState;
 
 	/** Montage played when the weapon fires. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	class UAnimationAsset* FireAnim;
 
 	/** Casing actor class ejected when the weapon fires. */
@@ -89,5 +89,32 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Weapon", meta = (ClampMin = 0))
 	float EjectImpulseStrength = 500.f;
 
+	/** Playback speed of the ADS weapon raise timeline. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
+	float ADSTimelinePlayRate = 1.f;
+
+	/** Field of view used while aiming down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS", meta = (ClampMin = 1, ClampMax = 160))
+	float ADSFOV = 70.f;
+
+	/** Look sensitivity multiplier while aiming down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS", meta = (ClampMin = 0.1, ClampMax = 5.0))
+	float ADSSensitivity = 0.5f;
+
 	FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
+
+
+	/**
+	* Textures for the weapon crosshairs
+	*/
+	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	class UTexture2D* CrosshairsCenter;
+	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	class UTexture2D* CrosshairsLeft;
+	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	class UTexture2D* CrosshairsRight;
+	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	class UTexture2D* CrosshairsTop;
+	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	class UTexture2D* CrosshairsBottom;
 };

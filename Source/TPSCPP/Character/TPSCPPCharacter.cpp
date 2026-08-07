@@ -12,6 +12,9 @@
 #include "TPSCPP.h"
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimInstance.h"
+#include "Kismet/GameplayStatics.h"
+#include "Particles/ParticleSystem.h"
+#include "Sound/SoundBase.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -64,6 +67,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
 	CustomMesh->SetupAttachment(GetMesh());
+	CustomMesh->SetCollisionObjectType(ECC_SkeletalMesh);
 
 	ViewModelWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ViewModelWeapon"));
 	ViewModelWeapon->SetupAttachment(FPS_Camera);
@@ -202,7 +206,14 @@ void ATPSCPPCharacter::DoLook(float Yaw, float Pitch)
 		}
 		else if (AimState == EAimState::ADS)
 		{
-			Sensitivity = ADSSensitivity;
+			if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+			{
+				Sensitivity = Weapon->ADSSensitivity;
+			}
+			else
+			{
+				Sensitivity = ADSSensitivity;
+			}
 		}
 
 		AddControllerYawInput(Yaw * Sensitivity);
@@ -500,6 +511,19 @@ void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
 	}
 }
 
+void ATPSCPPCharacter::MulticastPlayHitReaction_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
+{
+	if (BloodParticles)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), BloodParticles, ImpactPoint, ImpactRotation);
+	}
+
+	if (HitSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+	}
+}
+
 void ATPSCPPCharacter::DoADSEnd()
 {
 	if (AimState != EAimState::ADS)
@@ -547,11 +571,23 @@ void ATPSCPPCharacter::DoADSEnd()
 	{
 		Server_SetAimState(EAimState::Hipfire);
 	}
-}	void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
+}
+
+void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
 {
 	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
 	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
-	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, AimingFOV, Value));
+
+	// ADS uses the equipped weapon's FOV, otherwise fall back to the character aim FOV
+	float TargetFOV = AimingFOV;
+	if (AimState == EAimState::ADS)
+	{
+		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+		{
+			TargetFOV = Weapon->ADSFOV;
+		}
+	}
+	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, TargetFOV, Value));
 }
 
 void ATPSCPPCharacter::CameraTimelineFinished()
@@ -575,6 +611,7 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 				ViewModelWeapon->SetVisibility(true);
 			}
 
+			ADSTimeline->SetPlayRate(Weapon->ADSTimelinePlayRate);
 			ADSTimeline->PlayFromStart();
 		}
 	}

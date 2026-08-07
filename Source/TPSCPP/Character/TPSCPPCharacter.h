@@ -237,6 +237,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	void PlayFireMontage(bool bPlay);
 
+	/** Plays the hit feedback (blood particles and sound) on all machines. */
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayHitReaction(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float WalkSpeed = 500.f;
@@ -330,6 +334,14 @@ protected:
 	/** Montage played when firing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* FireMontage;
+
+	/** Blood particle system spawned at the hit point when this character is shot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	class UParticleSystem* BloodParticles;
+
+	/** Sound played at the hit point when this character is shot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	class USoundBase* HitSound;
 
 	/** Pending ADS camera sequence flag: shoulder animation first, then switch to FPS camera. */
 	UPROPERTY()
