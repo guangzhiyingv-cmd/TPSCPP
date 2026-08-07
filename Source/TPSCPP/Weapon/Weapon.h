@@ -89,6 +89,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Weapon", meta = (ClampMin = 0))
 	float EjectImpulseStrength = 500.f;
 
+	/** Seconds between consecutive shots. Controls the weapon fire rate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", meta = (ClampMin = 0.01))
+	float FireDelay = 0.15f;
+
+	/** Whether the weapon keeps firing while the fire button is held. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	bool bAutomatic = false;
+
 	/** Playback speed of the ADS weapon raise timeline. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
 	float ADSTimelinePlayRate = 1.f;

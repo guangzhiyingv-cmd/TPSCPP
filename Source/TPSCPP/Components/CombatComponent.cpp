@@ -125,9 +125,49 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 {
 	bFireButtonPressed = bPressed;
 
+	if (bPressed)
+	{
+		if (bCanFire && EquippedWeapon)
+		{
+			Fire();
+		}
+	}
+	else
+	{
+		// Stop the fire animation on all machines when the button is released
+		ServerFire(false, HitTarget);
+	}
+}
+
+void UCombatComponent::Fire()
+{
 	FHitResult TraceHitResult;
 	TraceUnderCrosshairs(TraceHitResult);
-	ServerFire(bPressed, HitTarget);
+	ServerFire(true, HitTarget);
+	StartFireTimer();
+}
+
+void UCombatComponent::StartFireTimer()
+{
+	if (!EquippedWeapon) return;
+
+	bCanFire = false;
+	GetWorld()->GetTimerManager().SetTimer(
+		FireTimer,
+		this,
+		&UCombatComponent::FireTimerFinished,
+		EquippedWeapon->FireDelay);
+}
+
+void UCombatComponent::FireTimerFinished()
+{
+	bCanFire = true;
+
+	// Continue firing while the button is held and the weapon supports full auto
+	if (EquippedWeapon && EquippedWeapon->bAutomatic && bFireButtonPressed)
+	{
+		Fire();
+	}
 }
 
 void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)

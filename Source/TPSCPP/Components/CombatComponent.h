@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Weapon/Weapon.h"
+#include "TimerManager.h"
 #include "Engine/NetSerialization.h"
 #include "CombatComponent.generated.h"
 
@@ -55,6 +56,12 @@ private:
 
 	void FireButtonPressed(bool bPressed);
 	bool bFireButtonPressed;
+	bool bCanFire = true;
+	FTimerHandle FireTimer;
+
+	void Fire();
+	void StartFireTimer();
+	void FireTimerFinished();
 
 	UFUNCTION(Server,Reliable)
 	void ServerFire(bool bPressed, const FVector_NetQuantize& InHitTarget);
