@@ -205,7 +205,7 @@ void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
   	{
   		// Start the trace at the character's position along the crosshair direction
   		// to avoid picking hit points between the camera and the pawn
-  		float CameraToCharacterDistance = FVector::Dist(CrosshairWorldPosition, Character->GetActorLocation()) + 25.f;
+  		float CameraToCharacterDistance = FVector::Dist(CrosshairWorldPosition, Character->GetActorLocation()) + 50.f;
   		FVector Start = CrosshairWorldPosition + CrosshairWorldDirection * CameraToCharacterDistance;
   		FVector End = CrosshairWorldPosition + CrosshairWorldDirection * TRACE_LENGTH;
 

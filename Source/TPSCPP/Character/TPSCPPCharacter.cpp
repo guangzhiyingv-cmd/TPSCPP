@@ -471,14 +471,13 @@ void ATPSCPPCharacter::DoADSToggle()
 
 void ATPSCPPCharacter::DoFirePressed()
 {
-	// Cancel sprinting before firing
-	if (bIsSprinting)
-	{
-		DoSprintEnd();
-	}
-
 	if (Combat && HasEquippedWeapon())
 	{
+		// Cancel sprinting before firing
+		if (bIsSprinting)
+		{
+			DoSprintEnd();
+		}
 		Combat->FireButtonPressed(true);
 	}
 }
