@@ -103,18 +103,14 @@ public:
 	ATPSCPPCharacter();	
 
 protected:
+	virtual void BeginPlay() override;
+
+	void UpdateHUDHealth();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-protected:
-
-	/** Initialize input action bindings */
-protected:
-
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
-protected:
 
 	/** Initialize component references after all subobjects are created */
 	virtual void PostInitializeComponents() override;
@@ -240,7 +236,8 @@ public:
 	/** Plays the hit feedback (blood particles and sound) on all machines. */
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastPlayHitReaction(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
-
+	UFUNCTION()
+	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float WalkSpeed = 500.f;
@@ -347,7 +344,36 @@ protected:
 	UPROPERTY()
 	bool bPendingADS = false;
 
+private:
+
+	/** Maximum health this character can have. */
+	UPROPERTY(EditAnywhere, Category = "PlayerStats", meta = (ClampMin = 1, AllowPrivateAccess = "true"))
+	float MaxHealth = 100.f;
+
+	/** Current health, replicated to all clients when it changes. */
+	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_Health, Category = "PlayerStats")
+	float Health = 100.f;
+
+	/** Called when Health is replicated to this machine. */
+	UFUNCTION()
+	void OnRep_Health();
+
+	/** Timer handle for delayed destruction after elimination. */
+	FTimerHandle ElimTimer;
+
+	/** Whether this character has already been eliminated. */
+	bool bEliminated = false;
+
+	/** Destroys the actor after the elimination delay. */
+	void ElimTimerFinished();
+
+	
 public:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	ATPSCPPPlayerController* PlayerController;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	class ATPSCPPGameMode* GameModeRef;
 
 	/** Whether the character has a weapon equipped. Replicated to all clients. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
@@ -358,5 +384,8 @@ public:
 
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Elim();
 };
 

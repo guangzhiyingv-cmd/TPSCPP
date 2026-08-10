@@ -86,3 +86,8 @@ void AProjectile::Tick(float DeltaTime)
 
 }
 
+void AProjectile::SetDamage(float NewDamage)
+{
+	Damage = NewDamage;
+}
+

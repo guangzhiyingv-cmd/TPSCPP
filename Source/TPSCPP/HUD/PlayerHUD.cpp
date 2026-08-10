@@ -1,5 +1,6 @@
 #include "HUD/PlayerHUD.h"
 #include "Engine/Texture2D.h"
+#include "CharacterOverlay.h"
 
 void APlayerHUD::DrawHUD()
 {
@@ -18,6 +19,25 @@ void APlayerHUD::DrawHUD()
 	DrawCrosshairTexture(HUDPackage.CrosshairTop, Center, FVector2D(0.f, -HUDPackage.CrosshairSpread));
 	DrawCrosshairTexture(HUDPackage.CrosshairBottom, Center, FVector2D(0.f, HUDPackage.CrosshairSpread));
 }
+
+void APlayerHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	PlayerController = GetOwningPlayerController();
+	AddCharacterOverlay();
+}
+
+void APlayerHUD::AddCharacterOverlay()
+{
+	if (PlayerController && CharacterOverlayClass)
+	{
+		CharacterOverlay = CreateWidget<UCharacterOverlay>(PlayerController, CharacterOverlayClass);
+		CharacterOverlay->AddToViewport();
+	}
+}
+
+
 
 void APlayerHUD::DrawCrosshairTexture(UTexture2D* Texture, const FVector2D& Center, const FVector2D& Offset)
 {

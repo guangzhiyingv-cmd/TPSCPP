@@ -24,6 +24,9 @@ public:
 	/** Equip the given weapon: set its state to Equipped, attach it to the character's hand socket, and store the reference. */
 	void EquipWeapon(AWeapon* WeaponToEquip);
 
+	/** Drop the currently equipped weapon so it falls as a physical pickup. */
+	void DropEquippedWeapon();
+
 	/** Set the weapon the owner is currently overlapping (server authority). */
 	void SetOverlappingWeapon(AWeapon* Weapon);
 

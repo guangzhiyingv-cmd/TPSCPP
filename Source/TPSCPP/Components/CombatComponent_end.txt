@@ -1,9 +1,0 @@
-﻿	UFUNCTION()
-	void OnRep_OverlappingWeapon();
-
-	/** Unified widget display logic called from both SetOverlappingWeapon and OnRep. */
-	void UpdatePickupWidgetDisplay();
-
-	UPROPERTY()
-	AWeapon* LastOverlappingWeapon;
-};

@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,14 +7,13 @@
 class UInputMappingContext;
 class UUserWidget;
 
-/**
- *  Basic PlayerController class for a third person game
- *  Manages input mappings
- */
 UCLASS(abstract)
 class ATPSCPPPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+public:
+	void SetHealthHUD(float Health, float MaxHealth);
 	
 protected:
 
@@ -49,4 +46,6 @@ protected:
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
 
+private:
+	class APlayerHUD* PlayerHUD;
 };

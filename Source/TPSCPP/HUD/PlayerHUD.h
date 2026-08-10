@@ -26,10 +26,21 @@ class TPSCPP_API APlayerHUD : public AHUD
 private:
 	FHUDPackage HUDPackage;
 
+	APlayerController* PlayerController;
+
 public:
 	virtual void DrawHUD() override;
 
 	FORCEINLINE void SetHUDPackage(const FHUDPackage& Package) { HUDPackage = Package; }
+
+	UPROPERTY(EditAnywhere, Category = "PlayerStats")
+	TSubclassOf<class UUserWidget> CharacterOverlayClass;
+
+	class UCharacterOverlay* CharacterOverlay;
+
+protected:
+	virtual void BeginPlay() override;
+	void AddCharacterOverlay();
 
 private:
 	void DrawCrosshairTexture(UTexture2D* Texture, const FVector2D& Center, const FVector2D& Offset);

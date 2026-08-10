@@ -18,6 +18,8 @@ public:
 	
 	/** Constructor */
 	ATPSCPPGameMode();
+
+	virtual void PlayerEliminated(class ATPSCPPCharacter* ElimmedCharacter, class ATPSCPPPlayerController* VictimController, class ATPSCPPPlayerController* AttackerController);
 };
 
 

@@ -27,12 +27,16 @@ void AProjectileWeapon::Fire(bool bPlay, const FVector& HitTarget)
 			UWorld* World = GetWorld();
 			if (World)
 			{
-				World->SpawnActor<AProjectile>(
+				AProjectile* SpawnedProjectile = World->SpawnActor<AProjectile>(
 					ProjectileClass,
 					SocketTransform.GetLocation(),
 					TargetRotation,
 					SpawnParams
 				);
+				if (SpawnedProjectile)
+				{
+					SpawnedProjectile->SetDamage(Damage);
+				}
 			}
 		}
 	}

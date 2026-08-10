@@ -1,18 +1,22 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 
-#include "TPSCPPPlayerController.h"
+#include "PlayerController/TPSCPPPlayerController.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
+#include "HUD/PlayerHUD.h"
+#include "HUD/CharacterOverlay.h"
 #include "TPSCPP.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+
 
 void ATPSCPPPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	PlayerHUD = Cast<APlayerHUD>(GetHUD());
 	// only spawn touch controls on local player controllers
 	if (IsLocalPlayerController() && ShouldUseTouchControls())
 	{
@@ -64,4 +68,13 @@ bool ATPSCPPPlayerController::ShouldUseTouchControls() const
 {
 	// are we on a mobile platform? Should we force touch?
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
+}
+
+void ATPSCPPPlayerController::SetHealthHUD(float Health, float MaxHealth)
+{
+	PlayerHUD = PlayerHUD == nullptr ? Cast<APlayerHUD>(GetHUD()) : PlayerHUD;
+	if (PlayerHUD && PlayerHUD->CharacterOverlay)
+	{
+		PlayerHUD->CharacterOverlay->SetHealthPercent(Health, MaxHealth);
+	}
 }

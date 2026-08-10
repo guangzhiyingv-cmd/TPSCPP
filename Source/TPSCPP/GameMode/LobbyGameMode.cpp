@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "LobbyGameMode.h"
+#include "GameMode/LobbyGameMode.h"
 #include "GameFramework/PlayerState.h"
 #include "Engine/World.h"
 

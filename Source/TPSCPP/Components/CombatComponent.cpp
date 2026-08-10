@@ -1,6 +1,6 @@
 #include "Components/CombatComponent.h"
 #include "Character/TPSCPPCharacter.h"
-#include "TPSCPPPlayerController.h"
+#include "PlayerController/TPSCPPPlayerController.h"
 #include "HUD/PlayerHUD.h"
 #include "TPSCPP.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -77,12 +77,7 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	if (!Character || !WeaponToEquip) return;
 
 	// Drop the currently equipped weapon if there is one
-	if (EquippedWeapon)
-	{
-		EquippedWeapon->WeaponState = EWeaponState::EWS_Dropped;
-		EquippedWeapon->SetAreaSphereCollisionEnabled(true);
-		EquippedWeapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-	}
+	DropEquippedWeapon();
 
 	EquippedWeapon = WeaponToEquip;
 	EquippedWeapon->SetOwner(Character);
@@ -101,6 +96,17 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bIsEquipped = true;
+}
+
+void UCombatComponent::DropEquippedWeapon()
+{
+	if (!EquippedWeapon) return;
+
+	EquippedWeapon->WeaponState = EWeaponState::EWS_Dropped;
+	EquippedWeapon->SetAreaSphereCollisionEnabled(true);
+	EquippedWeapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	EquippedWeapon->WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	EquippedWeapon->WeaponMesh->SetSimulatePhysics(true);
 }
 
 void UCombatComponent::OnRep_EquippedWeapon()

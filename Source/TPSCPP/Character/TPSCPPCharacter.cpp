@@ -10,6 +10,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "TPSCPP.h"
+#include "GameMode/TPSCPPGameMode.h"
+#include "PlayerController/TPSCPPPlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimInstance.h"
 #include "Kismet/GameplayStatics.h"
@@ -85,6 +87,18 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
 	Combat->SetIsReplicated(true);
+}
+
+void ATPSCPPCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	GameModeRef = GetWorld()->GetAuthGameMode<ATPSCPPGameMode>();
+	UpdateHUDHealth();
+	if (HasAuthority())
+	{
+		OnTakeAnyDamage.AddDynamic(this, &ATPSCPPCharacter::ReceiveDamage); 
+	}
 }
 
 void ATPSCPPCharacter::PostInitializeComponents()
@@ -510,6 +524,7 @@ void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
 	}
 }
 
+
 void ATPSCPPCharacter::MulticastPlayHitReaction_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
 	if (BloodParticles)
@@ -631,6 +646,7 @@ void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, Health, COND_None);
 }
 
 void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
@@ -660,4 +676,97 @@ void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 bool ATPSCPPCharacter::Server_SetAimState_Validate(EAimState NewState)
 {
 	return true;
+}
+
+
+
+
+
+//*****Health*****//
+
+
+
+
+
+void ATPSCPPCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
+{
+	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
+
+	if (HasAuthority())
+	{
+		UpdateHUDHealth();
+	}
+
+	if (Health == 0.f && GameModeRef)
+	{
+		PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
+		ATPSCPPPlayerController* AttackerController = Cast<ATPSCPPPlayerController>(InstigatorController);
+		GameModeRef->PlayerEliminated(this, PlayerController, AttackerController);
+	}
+}
+
+void ATPSCPPCharacter::OnRep_Health()
+{
+	UpdateHUDHealth();
+}
+
+
+void ATPSCPPCharacter::UpdateHUDHealth()
+{
+	PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
+	if (PlayerController)
+	{
+		PlayerController->SetHealthHUD(Health, MaxHealth);
+	}
+}
+
+
+void ATPSCPPCharacter::Elim_Implementation()
+{
+	if (bEliminated) return;
+	bEliminated = true;
+
+	// Stop movement and input so the eliminated character cannot keep acting
+	GetCharacterMovement()->DisableMovement();
+	GetCharacterMovement()->StopMovementImmediately();
+	if (GetController())
+	{
+		GetController()->SetIgnoreMoveInput(true);
+		GetController()->SetIgnoreLookInput(true);
+	}
+
+	// Stop firing if the fire button was held
+	if (Combat)
+	{
+		if (Combat->bFireButtonPressed)
+		{
+			Combat->FireButtonPressed(false);
+		}
+	}
+
+	// Disable capsule and child mesh collision queries so the corpse cannot block or be picked up
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CustomMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Drop the equipped weapon so it falls as a physical pickup instead of floating on the ragdoll
+	if (Combat)
+	{
+		Combat->DropEquippedWeapon();
+	}
+
+	// Turn the mesh into a ragdoll
+	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	GetMesh()->SetSimulatePhysics(true);
+
+	// Attach the camera boom to the mesh so the camera follows the ragdoll corpse
+	CameraBoom->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepWorldTransform);
+
+	// Destroy the actor after 5 seconds
+	GetWorldTimerManager().SetTimer(ElimTimer, this, &ATPSCPPCharacter::ElimTimerFinished, 5.f);
+}
+
+void ATPSCPPCharacter::ElimTimerFinished()
+{
+	Destroy();
 }

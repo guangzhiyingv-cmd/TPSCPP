@@ -28,9 +28,12 @@ protected:
 	/** Plays the hit effect and sound at the projectile's final location when it is destroyed. */
 	virtual void Destroyed() override;
 
+	UPROPERTY(EditAnywhere)
+	float Damage = 0.f;
 public:	
 	virtual void Tick(float DeltaTime) override;
 
+	void SetDamage(float NewDamage);
 private:
 	UPROPERTY(EditAnywhere)
 	class UBoxComponent* CollisionBox;

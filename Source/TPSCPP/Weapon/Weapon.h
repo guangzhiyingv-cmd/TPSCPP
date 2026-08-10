@@ -97,6 +97,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	bool bAutomatic = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	float Damage = 20;
+
 	/** Playback speed of the ADS weapon raise timeline. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
 	float ADSTimelinePlayRate = 1.f;
