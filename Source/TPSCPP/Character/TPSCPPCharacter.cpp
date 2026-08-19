@@ -17,6 +17,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
 #include "Sound/SoundBase.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "PlayerState/TPSCPPPlayerState.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -87,6 +89,8 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	Combat = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
 	Combat->SetIsReplicated(true);
+
+	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
 }
 
 void ATPSCPPCharacter::BeginPlay()
@@ -99,6 +103,20 @@ void ATPSCPPCharacter::BeginPlay()
 	{
 		OnTakeAnyDamage.AddDynamic(this, &ATPSCPPCharacter::ReceiveDamage); 
 	}
+}
+
+
+void ATPSCPPCharacter::Restart()
+{
+	Super::Restart();
+	UpdateHUDHealth();
+}
+
+void ATPSCPPCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	PollInit();
 }
 
 void ATPSCPPCharacter::PostInitializeComponents()
@@ -721,7 +739,18 @@ void ATPSCPPCharacter::UpdateHUDHealth()
 }
 
 
-void ATPSCPPCharacter::Elim_Implementation()
+void ATPSCPPCharacter::Elim()
+{
+	if (bEliminated) return;
+	MulticastElim();
+
+	// Destroy the actor after 5 seconds
+	GetWorldTimerManager().SetTimer(ElimTimer, this, &ATPSCPPCharacter::ElimTimerFinished, 5.f);
+}
+
+
+
+void ATPSCPPCharacter::MulticastElim_Implementation()
 {
 	if (bEliminated) return;
 	bEliminated = true;
@@ -762,11 +791,56 @@ void ATPSCPPCharacter::Elim_Implementation()
 	// Attach the camera boom to the mesh so the camera follows the ragdoll corpse
 	CameraBoom->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepWorldTransform);
 
-	// Destroy the actor after 5 seconds
-	GetWorldTimerManager().SetTimer(ElimTimer, this, &ATPSCPPCharacter::ElimTimerFinished, 5.f);
+	StartDissolve();
 }
 
 void ATPSCPPCharacter::ElimTimerFinished()
 {
-	Destroy();
+	if (GameModeRef)
+	{
+		GameModeRef->RequestRespawn(this, PlayerController);
+	}
+}
+
+void ATPSCPPCharacter::UpdateDissolveMaterial(float DissolveValue)
+{
+	for (UMaterialInstanceDynamic* MI : DissolveMIs)
+	{
+		if (MI)
+		{
+			MI->SetScalarParameterValue(DissolveParameterName, DissolveValue);
+		}
+	}
+}
+
+void ATPSCPPCharacter::StartDissolve()
+{
+	if (!DissolveCurve || !DissolveTimeline) return;
+
+	DissolveMIs.Empty();
+	for (int32 i = 0; i < GetMesh()->GetNumMaterials(); ++i)
+	{
+		DissolveMIs.Add(GetMesh()->CreateAndSetMaterialInstanceDynamic(i));
+	}
+	for (int32 i = 0; i < CustomMesh->GetNumMaterials(); ++i)
+	{
+		DissolveMIs.Add(CustomMesh->CreateAndSetMaterialInstanceDynamic(i));
+	}
+
+	DissolveTrack.BindDynamic(this, &ATPSCPPCharacter::UpdateDissolveMaterial);
+	DissolveTimeline->AddInterpFloat(DissolveCurve, DissolveTrack);
+	DissolveTimeline->Play();
+}
+
+void ATPSCPPCharacter::PollInit()
+{
+	if (PlayerStateRef == nullptr)
+	{
+		PlayerStateRef = GetPlayerState<ATPSCPPPlayerState>();
+		if (PlayerStateRef)
+		{
+			PlayerStateRef->AddToScore(0.0f);
+			PlayerStateRef->AddToDefeats(0.0f);
+		}
+	}
 }

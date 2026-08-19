@@ -14,6 +14,8 @@ class ATPSCPPPlayerController : public APlayerController
 
 public:
 	void SetHealthHUD(float Health, float MaxHealth);
+	void SetScoreHUD(float Score);
+	void SetDefeatsHUD(int32 Defeats);
 	
 protected:
 

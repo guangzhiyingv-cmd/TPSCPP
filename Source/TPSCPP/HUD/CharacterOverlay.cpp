@@ -28,6 +28,7 @@ void UCharacterOverlay::SetHealthPercent(float Health, float MaxHealth)
 	bInterpolating = true;
 }
 
+
 void UCharacterOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);

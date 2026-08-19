@@ -74,6 +74,12 @@ public:
 	UFUNCTION()
 	void OnRep_WeaponState();
 
+	UFUNCTION()
+	void SetWeaponState(EWeaponState State);
+
+	UFUNCTION()
+	void Dropped();
+
 	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_WeaponState)
 	EWeaponState WeaponState;
 

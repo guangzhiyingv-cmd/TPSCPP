@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
 #include "CharacterOverlay.generated.h"
 
 /**
@@ -17,6 +18,12 @@ class TPSCPP_API UCharacterOverlay : public UUserWidget
 public:
 	UPROPERTY(meta = (BindWidget))
 	class UProgressBar* HealthBar;
+
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* ScoreAmount;
+
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* DefeatsAmount;
 
 	/** Starts an interpolated update of the health bar toward the new health value. */
 	void SetHealthPercent(float Health, float MaxHealth);

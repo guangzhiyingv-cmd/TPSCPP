@@ -14,6 +14,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
+class UMaterialInstanceDynamic;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -104,6 +105,10 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	virtual void Restart() override;
+
+	virtual void Tick(float DeltaTime) override;
 
 	void UpdateHUDHealth();
 
@@ -367,6 +372,25 @@ private:
 	/** Destroys the actor after the elimination delay. */
 	void ElimTimerFinished();
 
+	/** Dissolve effect*/
+	UPROPERTY(VisibleAnywhere)
+	UTimelineComponent* DissolveTimeline;
+	FOnTimelineFloat DissolveTrack;
+
+	UPROPERTY(EditAnywhere, Category = "Effects")
+	UCurveFloat* DissolveCurve;
+
+	/** Scalar parameter name driven by the dissolve timeline. */
+	UPROPERTY(EditAnywhere, Category = "Effects")
+	FName DissolveParameterName = TEXT("Dissolve");
+
+	/** Per-material-slot dynamic instances used to dissolve the whole character. */
+	UPROPERTY(Transient)
+	TArray<UMaterialInstanceDynamic*> DissolveMIs;
+
+	UFUNCTION()
+	void UpdateDissolveMaterial(float DissolveValue);
+	void StartDissolve();
 	
 public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -374,6 +398,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class ATPSCPPGameMode* GameModeRef;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	class ATPSCPPPlayerState* PlayerStateRef;
 
 	/** Whether the character has a weapon equipped. Replicated to all clients. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
@@ -386,6 +413,13 @@ public:
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 	UFUNCTION(NetMulticast, Reliable)
-	void Elim();
+	void MulticastElim();
+
+	UFUNCTION()
+	void Elim();	//GameMode call this function so it only runs on the server
+
+protected:
+	//Poll for any relelvant classes and initialize our HUD
+	void PollInit();
 };
 

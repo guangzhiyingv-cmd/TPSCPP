@@ -20,6 +20,8 @@ public:
 	ATPSCPPGameMode();
 
 	virtual void PlayerEliminated(class ATPSCPPCharacter* ElimmedCharacter, class ATPSCPPPlayerController* VictimController, class ATPSCPPPlayerController* AttackerController);
+
+	virtual void RequestRespawn(class ACharacter* ElimmedCharacter, class AController* ElimmedController);
 };
 
 

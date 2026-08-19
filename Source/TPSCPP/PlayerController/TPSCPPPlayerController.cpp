@@ -78,3 +78,23 @@ void ATPSCPPPlayerController::SetHealthHUD(float Health, float MaxHealth)
 		PlayerHUD->CharacterOverlay->SetHealthPercent(Health, MaxHealth);
 	}
 }
+
+void ATPSCPPPlayerController::SetScoreHUD(float Score)
+{
+	PlayerHUD = PlayerHUD == nullptr ? Cast<APlayerHUD>(GetHUD()) : PlayerHUD;
+	if (PlayerHUD && PlayerHUD->CharacterOverlay && PlayerHUD->CharacterOverlay->ScoreAmount)
+	{
+		FString ScoreText = FString::Printf(TEXT("%d"), FMath::FloorToInt(Score));
+		PlayerHUD->CharacterOverlay->ScoreAmount->SetText(FText::FromString(ScoreText));
+	}
+}
+
+void ATPSCPPPlayerController::SetDefeatsHUD(int32 Defeats)
+{
+	PlayerHUD = PlayerHUD == nullptr ? Cast<APlayerHUD>(GetHUD()) : PlayerHUD;
+	if (PlayerHUD && PlayerHUD->CharacterOverlay && PlayerHUD->CharacterOverlay->DefeatsAmount)
+	{
+		FString DefeatsText = FString::Printf(TEXT("%d"), Defeats);
+		PlayerHUD->CharacterOverlay->DefeatsAmount->SetText(FText::FromString(DefeatsText));
+	}
+}

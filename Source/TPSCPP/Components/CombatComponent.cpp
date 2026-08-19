@@ -81,8 +81,7 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 
 	EquippedWeapon = WeaponToEquip;
 	EquippedWeapon->SetOwner(Character);
-	EquippedWeapon->WeaponState = EWeaponState::EWS_Equipped;
-	EquippedWeapon->SetAreaSphereCollisionEnabled(false);
+	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 	// Attach the weapon mesh to the character's right hand socket
 	EquippedWeapon->WeaponMesh->AttachToComponent(
 		Character->GetCustomMesh(),
@@ -102,11 +101,7 @@ void UCombatComponent::DropEquippedWeapon()
 {
 	if (!EquippedWeapon) return;
 
-	EquippedWeapon->WeaponState = EWeaponState::EWS_Dropped;
-	EquippedWeapon->SetAreaSphereCollisionEnabled(true);
-	EquippedWeapon->WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
-	EquippedWeapon->WeaponMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	EquippedWeapon->WeaponMesh->SetSimulatePhysics(true);
+	EquippedWeapon->Dropped();
 }
 
 void UCombatComponent::OnRep_EquippedWeapon()
@@ -115,6 +110,11 @@ void UCombatComponent::OnRep_EquippedWeapon()
 
 	if (EquippedWeapon)
 	{
+		EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
+		EquippedWeapon->WeaponMesh->AttachToComponent(
+			Character->GetCustomMesh(),
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+			TEXT("hand_rSocket"));
 		Character->bUseControllerRotationYaw = false;
 		Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
