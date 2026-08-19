@@ -98,6 +98,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* FireAction;
 
+	/** Reload Input Action */
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* ReloadAction;
+
 public:
 
 	/** Constructor */
@@ -178,6 +182,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool HasEquippedWeapon() const;
 
+	/** Returns whether the character is currently reloading its equipped weapon. */
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	bool IsReloading() const;
+
 	/** Returns true if the character is in either aiming state. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool IsAiming() const;
@@ -234,9 +242,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoFireReleased();
 
+	/** Handles reload pressed input. */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoReload();
+
 	/** Plays or stops the fire montage on the character mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	void PlayFireMontage(bool bPlay);
+
+	/** Plays or stops the reload montage on the character mesh. */
+	UFUNCTION(BlueprintCallable, Category="Animation")
+	void PlayReloadMontage(bool bPlay);
 
 	/** Plays the hit feedback (blood particles and sound) on all machines. */
 	UFUNCTION(NetMulticast, Unreliable)
@@ -337,6 +353,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* FireMontage;
 
+	/** Montage played while reloading the equipped weapon. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	UAnimMontage* ReloadMontage;
+
 	/** Blood particle system spawned at the hit point when this character is shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
 	class UParticleSystem* BloodParticles;
@@ -362,6 +382,10 @@ private:
 	/** Called when Health is replicated to this machine. */
 	UFUNCTION()
 	void OnRep_Health();
+
+	/** Called when ReserveAmmo is replicated to this machine. */
+	UFUNCTION()
+	void OnRep_ReserveAmmo();
 
 	/** Timer handle for delayed destruction after elimination. */
 	FTimerHandle ElimTimer;
@@ -398,6 +422,14 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class ATPSCPPGameMode* GameModeRef;
+
+	/** Reserve ammo carried by the player, shared across reloads. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_ReserveAmmo, Category = "PlayerStats")
+	int32 ReserveAmmo = 0;
+
+	/** Reserve ammo the player starts with on spawn. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "PlayerStats", meta = (ClampMin = 0))
+	int32 StartingReserveAmmo = 120;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	class ATPSCPPPlayerState* PlayerStateRef;

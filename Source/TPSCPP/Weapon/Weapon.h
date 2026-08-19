@@ -106,6 +106,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	float Damage = 20;
 
+	/** Magazine capacity of this weapon. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo", meta = (ClampMin = 1))
+	int32 MagCapacity = 30;
+
+	/** Ammo currently loaded in the magazine. Replicated to the owning client. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_Ammo, Category = "Ammo")
+	int32 Ammo = 30;
+
+	/** Time in seconds required to reload the magazine. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo", meta = (ClampMin = 0.01))
+	float ReloadTime = 2.f;
+
+	/** When enabled, firing never consumes reserve ammo and reload always refills. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo")
+	bool bInfiniteAmmo = false;
+
+	/** Called when Ammo or ReserveAmmo is replicated to this machine. */
+	UFUNCTION()
+	void OnRep_Ammo();
+
+	/** Sets the current magazine ammo on the server. */
+	void SetAmmo(int32 NewAmmo);
+
 	/** Playback speed of the ADS weapon raise timeline. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
 	float ADSTimelinePlayRate = 1.f;

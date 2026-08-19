@@ -98,3 +98,13 @@ void ATPSCPPPlayerController::SetDefeatsHUD(int32 Defeats)
 		PlayerHUD->CharacterOverlay->DefeatsAmount->SetText(FText::FromString(DefeatsText));
 	}
 }
+
+void ATPSCPPPlayerController::SetAmmoHUD(int32 Ammo, int32 ReserveAmmo)
+{
+	PlayerHUD = PlayerHUD == nullptr ? Cast<APlayerHUD>(GetHUD()) : PlayerHUD;
+	if (PlayerHUD && PlayerHUD->CharacterOverlay && PlayerHUD->CharacterOverlay->AmmoAmount && PlayerHUD->CharacterOverlay->ReloadAmount)
+	{
+		PlayerHUD->CharacterOverlay->AmmoAmount->SetText(FText::FromString(FString::FromInt(Ammo)));
+		PlayerHUD->CharacterOverlay->ReloadAmount->SetText(FText::FromString(FString::FromInt( ReserveAmmo)));
+	}
+}

@@ -25,6 +25,12 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* DefeatsAmount;
 
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* AmmoAmount;
+
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* ReloadAmount;
+
 	/** Starts an interpolated update of the health bar toward the new health value. */
 	void SetHealthPercent(float Health, float MaxHealth);
 

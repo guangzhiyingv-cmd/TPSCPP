@@ -95,11 +95,18 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bIsEquipped = true;
+	UpdateAmmoHUD();
 }
 
 void UCombatComponent::DropEquippedWeapon()
 {
 	if (!EquippedWeapon) return;
+
+	if (bReloading)
+	{
+		bReloading = false;
+		GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+	}
 
 	EquippedWeapon->Dropped();
 }
@@ -118,6 +125,7 @@ void UCombatComponent::OnRep_EquippedWeapon()
 		Character->bUseControllerRotationYaw = false;
 		Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+		UpdateAmmoHUD();
 	}
 }
 
@@ -147,6 +155,11 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 
 void UCombatComponent::Fire()
 {
+	if (!EquippedWeapon || EquippedWeapon->Ammo <= 0) return;
+
+	// Firing cancels an in-progress reload
+	bReloading = false;
+
 	FHitResult TraceHitResult;
 	TraceUnderCrosshairs(TraceHitResult);
 	ServerFire(true, HitTarget);
@@ -169,10 +182,90 @@ void UCombatComponent::FireTimerFinished()
 {
 	bCanFire = true;
 
+	if (!EquippedWeapon) return;
+
+	// Automatically start a reload when the magazine is empty
+	if (EquippedWeapon->Ammo <= 0)
+	{
+		StartReload();
+		return;
+	}
+
 	// Continue firing while the button is held and the weapon supports full auto
-	if (EquippedWeapon && EquippedWeapon->bAutomatic && bFireButtonPressed)
+	if (EquippedWeapon->bAutomatic && bFireButtonPressed)
 	{
 		Fire();
+	}
+}
+
+void UCombatComponent::StartReload()
+{
+	if (!EquippedWeapon || !Character || bReloading) return;
+	if (EquippedWeapon->Ammo >= EquippedWeapon->MagCapacity) return;
+	if (!EquippedWeapon->bInfiniteAmmo && Character->ReserveAmmo <= 0) return;
+
+	bReloading = true;
+
+	if (Character->HasAuthority())
+	{
+		GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
+		MulticastReload(true);
+	}
+	else
+	{
+		ServerReload();
+	}
+}
+
+void UCombatComponent::ServerReload_Implementation()
+{
+	if (!EquippedWeapon || !Character || bReloading) return;
+	if (EquippedWeapon->Ammo >= EquippedWeapon->MagCapacity) return;
+	if (!EquippedWeapon->bInfiniteAmmo && Character->ReserveAmmo <= 0) return;
+
+	bReloading = true;
+	GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
+	MulticastReload(true);
+}
+
+void UCombatComponent::MulticastReload_Implementation(bool bPlay)
+{
+	if (Character)
+	{
+		Character->PlayReloadMontage(bPlay);
+	}
+}
+
+void UCombatComponent::ReloadTimerFinished()
+{
+	if (!EquippedWeapon)
+	{
+		bReloading = false;
+		return;
+	}
+
+	if (EquippedWeapon->bInfiniteAmmo)
+	{
+		EquippedWeapon->SetAmmo(EquippedWeapon->MagCapacity);
+	}
+	else
+	{
+		const int32 AmmoNeeded = EquippedWeapon->MagCapacity - EquippedWeapon->Ammo;
+		const int32 AmmoToLoad = FMath::Min(AmmoNeeded, Character->ReserveAmmo);
+		EquippedWeapon->SetAmmo(EquippedWeapon->Ammo + AmmoToLoad);
+		Character->ReserveAmmo -= AmmoToLoad;
+	}
+
+	UpdateAmmoHUD();
+	MulticastReloadFinished();
+}
+
+void UCombatComponent::MulticastReloadFinished_Implementation()
+{
+	bReloading = false;
+	if (Character)
+	{
+		Character->PlayReloadMontage(false);
 	}
 }
 
@@ -188,6 +281,22 @@ void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector
 
 void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
 {
+	if (bPressed)
+	{
+		// Firing cancels an in-progress reload
+		if (bReloading)
+		{
+			bReloading = false;
+			GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+			MulticastReload(false);
+		}
+
+		if (EquippedWeapon && EquippedWeapon->Ammo > 0)
+		{
+			EquippedWeapon->SetAmmo(EquippedWeapon->Ammo - 1);
+			UpdateAmmoHUD();
+		}
+	}
 	MulticastFire(bPressed, InHitTarget);
 }
 
@@ -336,6 +445,28 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 			HUDPackage.CrosshairSpread = FMath::Max(Spread, 0.f);
 
 			HUD->SetHUDPackage(HUDPackage);
+		}
+	}
+}
+
+void UCombatComponent::UpdateAmmoHUD()
+{
+	if (!Character) return;
+
+	ATPSCPPPlayerController* PlayerController = Character->PlayerController;
+	if (!PlayerController)
+	{
+		PlayerController = Cast<ATPSCPPPlayerController>(Character->GetController());
+	}
+	Controller = PlayerController;
+	if (Controller)
+	{
+		HUD = HUD == nullptr ? Cast<APlayerHUD>(Controller->GetHUD()) : HUD;
+		if (HUD && HUD->CharacterOverlay)
+		{
+			const int32 Ammo = EquippedWeapon ? EquippedWeapon->Ammo : 0;
+			const int32 Reserve = Character->ReserveAmmo;
+			Controller->SetAmmoHUD(Ammo, Reserve);
 		}
 	}
 }

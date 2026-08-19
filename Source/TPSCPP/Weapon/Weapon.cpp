@@ -31,6 +31,8 @@ AWeapon::AWeapon()
 	PickupWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	PickupWidget->SetDrawSize(FVector2D(150.f, 40.f));
 	PickupWidget->SetVisibility(false);
+
+	Ammo = MagCapacity;
 }
 
 void AWeapon::SetAreaSphereCollisionEnabled(bool bEnabled)
@@ -57,6 +59,7 @@ void AWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeP
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AWeapon, WeaponState);
+	DOREPLIFETIME_CONDITION(AWeapon, Ammo, COND_OwnerOnly);
 }
 
 void AWeapon::OnSphereOverlap(
@@ -207,5 +210,21 @@ void AWeapon::Dropped()
 	SetWeaponState(EWeaponState::EWS_Dropped);
 	WeaponMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 	SetOwner(nullptr);
+}
+
+void AWeapon::SetAmmo(int32 NewAmmo)
+{
+	Ammo = FMath::Clamp(NewAmmo, 0, MagCapacity);
+}
+
+void AWeapon::OnRep_Ammo()
+{
+	if (ATPSCPPCharacter* OwnerCharacter = Cast<ATPSCPPCharacter>(GetOwner()))
+	{
+		if (UCombatComponent* Combat = OwnerCharacter->GetCombat())
+		{
+			Combat->UpdateAmmoHUD();
+		}
+	}
 }
 

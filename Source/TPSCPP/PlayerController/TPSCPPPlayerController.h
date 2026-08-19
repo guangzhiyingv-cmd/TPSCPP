@@ -16,6 +16,7 @@ public:
 	void SetHealthHUD(float Health, float MaxHealth);
 	void SetScoreHUD(float Score);
 	void SetDefeatsHUD(int32 Defeats);
+	void SetAmmoHUD(int32 Ammo, int32 ReserveAmmo);
 	
 protected:
 

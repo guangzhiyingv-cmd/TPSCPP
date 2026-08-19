@@ -91,6 +91,8 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	Combat->SetIsReplicated(true);
 
 	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
+
+	ReserveAmmo = StartingReserveAmmo;
 }
 
 void ATPSCPPCharacter::BeginPlay()
@@ -182,6 +184,9 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		// Firing
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoFirePressed);
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoFireReleased);
+
+		// Reloading
+		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoReload);
 	}
 	else
 	{
@@ -296,6 +301,11 @@ bool ATPSCPPCharacter::Server_EquipWeapon_Validate()
 bool ATPSCPPCharacter::HasEquippedWeapon() const
 {
 	return Combat && Combat->GetEquippedWeapon() != nullptr;
+}
+
+bool ATPSCPPCharacter::IsReloading() const
+{
+	return Combat != nullptr && Combat->bReloading;
 }
 
 bool ATPSCPPCharacter::IsAiming() const
@@ -522,6 +532,14 @@ void ATPSCPPCharacter::DoFireReleased()
 	}
 }
 
+void ATPSCPPCharacter::DoReload()
+{
+	if (Combat)
+	{
+		Combat->StartReload();
+	}
+}
+
 void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
 {
 	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
@@ -538,6 +556,26 @@ void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
 		if (FireMontage)
 		{
 			GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, FireMontage);
+		}
+	}
+}
+
+void ATPSCPPCharacter::PlayReloadMontage(bool bPlay)
+{
+	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
+
+	if (bPlay)
+	{
+		if (ReloadMontage)
+		{
+			GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage);
+		}
+	}
+	else
+	{
+		if (ReloadMontage)
+		{
+			GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, ReloadMontage);
 		}
 	}
 }
@@ -665,6 +703,7 @@ void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, Health, COND_None);
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, ReserveAmmo, COND_OwnerOnly);
 }
 
 void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
@@ -726,6 +765,14 @@ void ATPSCPPCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const U
 void ATPSCPPCharacter::OnRep_Health()
 {
 	UpdateHUDHealth();
+}
+
+void ATPSCPPCharacter::OnRep_ReserveAmmo()
+{
+	if (Combat)
+	{
+		Combat->UpdateAmmoHUD();
+	}
 }
 
 
