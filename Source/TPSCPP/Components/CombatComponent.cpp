@@ -6,7 +6,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
-#include "DrawDebugHelpers.h"
 
 UCombatComponent::UCombatComponent()
 {
@@ -349,13 +348,15 @@ void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
   		{
   			TraceHitResult = *ClosestHit;
   			HitTarget = ClosestHit->ImpactPoint;
-  			DrawDebugSphere(GetWorld(), ClosestHit->ImpactPoint, 12.f, 12, FColor::Red);
   		}
   		else
   		{
   			TraceHitResult.ImpactPoint = End;
   			HitTarget = End;
   		}
+
+  		// Move the fire target slightly forward along the screen-center ray
+  		HitTarget += CrosshairWorldDirection * 15.f;
   	}
 	
 }
