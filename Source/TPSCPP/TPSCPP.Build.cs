@@ -20,7 +20,8 @@ public class TPSCPP : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemSteam",
 			"UMG",
-			"Slate"
+			"Slate",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

@@ -28,6 +28,19 @@ void UCharacterOverlay::SetHealthPercent(float Health, float MaxHealth)
 	bInterpolating = true;
 }
 
+void UCharacterOverlay::SetTimeText(float Seconds)
+{
+	if (!TimeText)
+	{
+		return;
+	}
+
+	const int32 TotalSeconds = FMath::Max(0, FMath::FloorToInt(Seconds));
+	const int32 Minutes = TotalSeconds / 60;
+	const int32 RemainingSeconds = TotalSeconds % 60;
+	TimeText->SetText(FText::FromString(
+		FString::Printf(TEXT("%02d:%02d"), Minutes, RemainingSeconds)));
+}
 
 void UCharacterOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {

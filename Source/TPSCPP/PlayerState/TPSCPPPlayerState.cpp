@@ -8,6 +8,12 @@ void ATPSCPPPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ATPSCPPPlayerState, Defeats);
+	DOREPLIFETIME(ATPSCPPPlayerState, WarmupStartTime);
+	DOREPLIFETIME(ATPSCPPPlayerState, WarmupTime);
+	DOREPLIFETIME(ATPSCPPPlayerState, MatchStartTime);
+	DOREPLIFETIME(ATPSCPPPlayerState, MatchTime);
+	DOREPLIFETIME(ATPSCPPPlayerState, PostMatchStartTime);
+	DOREPLIFETIME(ATPSCPPPlayerState, PostMatchTime);
 }
 
 void ATPSCPPPlayerState::OnRep_Score()
@@ -68,6 +74,39 @@ void ATPSCPPPlayerState::AddToDefeats(int32 DefeatsAmount)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ATPSCPPPlayerState::AddToDefeats is not called on server!"));
 	}
+}
+
+void ATPSCPPPlayerState::SetWarmupData(float InWarmupStartTime, float InWarmupTime)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	WarmupStartTime = InWarmupStartTime;
+	WarmupTime = InWarmupTime;
+}
+
+void ATPSCPPPlayerState::SetMatchData(float InMatchStartTime, float InMatchTime)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MatchStartTime = InMatchStartTime;
+	MatchTime = InMatchTime;
+}
+
+void ATPSCPPPlayerState::SetPostMatchData(float InPostMatchStartTime, float InPostMatchTime)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	PostMatchStartTime = InPostMatchStartTime;
+	PostMatchTime = InPostMatchTime;
 }
 
 void ATPSCPPPlayerState::OnRep_Defeats()

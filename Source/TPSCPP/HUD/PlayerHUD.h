@@ -25,6 +25,7 @@ class TPSCPP_API APlayerHUD : public AHUD
 	
 private:
 	FHUDPackage HUDPackage;
+	bool bShowCrosshair = true;
 
 	APlayerController* PlayerController;
 
@@ -38,9 +39,29 @@ public:
 
 	class UCharacterOverlay* CharacterOverlay;
 
+	UPROPERTY(EditAnywhere, Category = "PlayerStats")
+	TSubclassOf<class UUserWidget> WarmupOverlayClass;
+
+	class UWarmupOverlay* WarmupOverlay;
+
+	UPROPERTY(EditAnywhere, Category = "PlayerStats")
+	TSubclassOf<class UUserWidget> PostMatchOverlayClass;
+
+	class UPostMatchOverlay* PostMatchOverlay;
+
+	void ShowWarmupOverlay(bool bShow);
+	void ShowCharacterOverlay(bool bShow);
+	void SetWarmupCountdownText(float Seconds);
+	void ShowPostMatchOverlay(bool bShow);
+	void SetPostMatchCountdownText(float Seconds);
+	void SetPostMatchTopPlayerText(const FString& PlayerName, int32 Kills);
+	void SetShowCrosshair(bool bShow);
+
 protected:
 	virtual void BeginPlay() override;
 	void AddCharacterOverlay();
+	void AddWarmupOverlay();
+	void AddPostMatchOverlay();
 
 private:
 	void DrawCrosshairTexture(UTexture2D* Texture, const FVector2D& Center, const FVector2D& Offset);

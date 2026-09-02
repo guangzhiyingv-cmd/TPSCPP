@@ -31,8 +31,14 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* ReloadAmount;
 
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* TimeText;
+
 	/** Starts an interpolated update of the health bar toward the new health value. */
 	void SetHealthPercent(float Health, float MaxHealth);
+
+	/** Updates the game time text. */
+	void SetTimeText(float Seconds);
 
 protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;

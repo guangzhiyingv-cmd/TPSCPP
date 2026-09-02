@@ -25,6 +25,39 @@ public:
 	/** Adds to the player's defeat count on the server and notifies clients. */
 	void AddToDefeats(int32 DefeatsAmount);
 
+	/** Sets warmup timing data on the server and replicates it to clients. */
+	void SetWarmupData(float InWarmupStartTime, float InWarmupTime);
+
+	/** Server time when the warmup countdown started. */
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "Match")
+	float WarmupStartTime = 0.f;
+
+	/** Total warmup countdown duration. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Match", meta = (ClampMin = 1))
+	float WarmupTime = 10.f;
+
+	/** Server time when the match started. */
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "Match")
+	float MatchStartTime = 0.f;
+
+	/** Total duration of the match after warmup ends. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Match", meta = (ClampMin = 1))
+	float MatchTime = 120.f;
+
+	/** Sets match timing data on the server and replicates it to clients. */
+	void SetMatchData(float InMatchStartTime, float InMatchTime);
+
+	/** Server time when the post-match countdown started. */
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "Match")
+	float PostMatchStartTime = 0.f;
+
+	/** Total post-match countdown duration. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Match", meta = (ClampMin = 1))
+	float PostMatchTime = 10.f;
+
+	/** Sets post-match timing data on the server and replicates it to clients. */
+	void SetPostMatchData(float InPostMatchStartTime, float InPostMatchTime);
+
 private:
 	UFUNCTION()
 	void OnRep_Defeats();

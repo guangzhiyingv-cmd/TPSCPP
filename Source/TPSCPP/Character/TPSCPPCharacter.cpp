@@ -15,6 +15,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimInstance.h"
 #include "Kismet/GameplayStatics.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "Particles/ParticleSystem.h"
 #include "Sound/SoundBase.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -583,14 +585,26 @@ void ATPSCPPCharacter::PlayReloadMontage(bool bPlay)
 
 void ATPSCPPCharacter::MulticastPlayHitReaction_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
-	if (BloodParticles)
+	if (BloodNiagaraSystem)
 	{
-		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), BloodParticles, ImpactPoint, ImpactRotation);
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			GetWorld(),
+			BloodNiagaraSystem,
+			ImpactPoint,
+			ImpactRotation);
 	}
 
 	if (HitSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+		if (UWorld* World = GetWorld())
+		{
+			const float CurrentTime = World->GetTimeSeconds();
+			if (CurrentTime - LastHitSoundTime >= HitSoundCooldown)
+			{
+				LastHitSoundTime = CurrentTime;
+				UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+			}
+		}
 	}
 }
 

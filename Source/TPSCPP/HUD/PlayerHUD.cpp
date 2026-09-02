@@ -1,10 +1,17 @@
 #include "HUD/PlayerHUD.h"
 #include "Engine/Texture2D.h"
-#include "CharacterOverlay.h"
+#include "HUD/CharacterOverlay.h"
+#include "HUD/WarmupOverlay.h"
+#include "HUD/PostMatchOverlay.h"
 
 void APlayerHUD::DrawHUD()
 {
 	Super::DrawHUD();
+
+	if (!bShowCrosshair)
+	{
+		return;
+	}
 
 	FVector2D ViewportSize;
 	if (GEngine && GEngine->GameViewport)
@@ -26,6 +33,8 @@ void APlayerHUD::BeginPlay()
 
 	PlayerController = GetOwningPlayerController();
 	AddCharacterOverlay();
+	AddWarmupOverlay();
+	AddPostMatchOverlay();
 }
 
 void APlayerHUD::AddCharacterOverlay()
@@ -34,10 +43,82 @@ void APlayerHUD::AddCharacterOverlay()
 	{
 		CharacterOverlay = CreateWidget<UCharacterOverlay>(PlayerController, CharacterOverlayClass);
 		CharacterOverlay->AddToViewport();
+		CharacterOverlay->SetVisibility(ESlateVisibility::Hidden);
 	}
 }
 
+void APlayerHUD::AddWarmupOverlay()
+{
+	if (PlayerController && WarmupOverlayClass)
+	{
+		WarmupOverlay = CreateWidget<UWarmupOverlay>(PlayerController, WarmupOverlayClass);
+		WarmupOverlay->AddToViewport();
+		WarmupOverlay->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
 
+void APlayerHUD::AddPostMatchOverlay()
+{
+	if (PlayerController && PostMatchOverlayClass)
+	{
+		PostMatchOverlay = CreateWidget<UPostMatchOverlay>(PlayerController, PostMatchOverlayClass);
+		PostMatchOverlay->AddToViewport();
+		PostMatchOverlay->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+void APlayerHUD::ShowWarmupOverlay(bool bShow)
+{
+	if (WarmupOverlay)
+	{
+		WarmupOverlay->SetVisibility(bShow ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+}
+
+void APlayerHUD::ShowCharacterOverlay(bool bShow)
+{
+	if (CharacterOverlay)
+	{
+		CharacterOverlay->SetVisibility(bShow ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+}
+
+void APlayerHUD::SetWarmupCountdownText(float Seconds)
+{
+	if (WarmupOverlay)
+	{
+		WarmupOverlay->SetCountdownText(Seconds);
+	}
+}
+
+void APlayerHUD::ShowPostMatchOverlay(bool bShow)
+{
+	if (PostMatchOverlay)
+	{
+		PostMatchOverlay->SetVisibility(bShow ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+	}
+}
+
+void APlayerHUD::SetPostMatchCountdownText(float Seconds)
+{
+	if (PostMatchOverlay)
+	{
+		PostMatchOverlay->SetCountdownText(Seconds);
+	}
+}
+
+void APlayerHUD::SetPostMatchTopPlayerText(const FString& PlayerName, int32 Kills)
+{
+	if (PostMatchOverlay)
+	{
+		PostMatchOverlay->SetTopPlayerInfo(PlayerName, Kills);
+	}
+}
+
+void APlayerHUD::SetShowCrosshair(bool bShow)
+{
+	bShowCrosshair = bShow;
+}
 
 void APlayerHUD::DrawCrosshairTexture(UTexture2D* Texture, const FVector2D& Center, const FVector2D& Offset)
 {

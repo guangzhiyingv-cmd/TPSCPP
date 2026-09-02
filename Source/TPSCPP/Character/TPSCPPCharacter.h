@@ -357,13 +357,20 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* ReloadMontage;
 
-	/** Blood particle system spawned at the hit point when this character is shot. */
+	/** Niagara system spawned at the hit point when this character is shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
-	class UParticleSystem* BloodParticles;
+	class UNiagaraSystem* BloodNiagaraSystem;
 
 	/** Sound played at the hit point when this character is shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
 	class USoundBase* HitSound;
+
+	/** Minimum seconds between hit sound plays. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects", meta = (ClampMin = 0.f))
+	float HitSoundCooldown = 0.7f;
+
+	/** Last time the hit sound was played on this machine. */
+	float LastHitSoundTime = -1.f;
 
 	/** Pending ADS camera sequence flag: shoulder animation first, then switch to FPS camera. */
 	UPROPERTY()
