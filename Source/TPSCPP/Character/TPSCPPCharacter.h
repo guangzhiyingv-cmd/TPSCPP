@@ -252,7 +252,7 @@ public:
 
 	/** Plays or stops the reload montage on the character mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
-	void PlayReloadMontage(bool bPlay);
+	void PlayReloadMontage(bool bPlay,float ReloadTime=2.0f);
 
 	/** Plays the hit feedback (blood particles and sound) on all machines. */
 	UFUNCTION(NetMulticast, Unreliable)
@@ -293,10 +293,6 @@ protected:
 	/** Aiming camera: field of view. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = 10, ClampMax = 160))
 	float AimingFOV = 70.f;
-
-	/** Weapon offset when attached to the first-person camera during ADS. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
-	FVector FPSWeaponRelativeLocation = FVector(30.f, 0.f, -20.f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	FRotator FPSWeaponRelativeRotation = FRotator::ZeroRotator;

@@ -81,7 +81,7 @@ private:
 	void MulticastReloadFinished();
 
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastReload(bool bPlay);
+	void MulticastReload(bool bPlay,float ReloadTime);
 
 	UPROPERTY(Replicated)
 	bool bReloading = false;

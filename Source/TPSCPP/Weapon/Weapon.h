@@ -111,7 +111,7 @@ public:
 	int32 MagCapacity = 30;
 
 	/** Ammo currently loaded in the magazine. Replicated to the owning client. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_Ammo, Category = "Ammo")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing = OnRep_Ammo, Category = "Ammo")
 	int32 Ammo = 30;
 
 	/** Time in seconds required to reload the magazine. */
@@ -132,6 +132,10 @@ public:
 	/** Playback speed of the ADS weapon raise timeline. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
 	float ADSTimelinePlayRate = 1.f;
+
+	/** Final local view model position when this weapon is aimed down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS")
+	FVector FPSWeaponRelativeLocation = FVector(30.f, 0.f, -20.f);
 
 	/** Field of view used while aiming down sights. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS", meta = (ClampMin = 1, ClampMax = 160))

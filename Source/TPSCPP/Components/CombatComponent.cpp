@@ -203,12 +203,17 @@ void UCombatComponent::StartReload()
 	if (EquippedWeapon->Ammo >= EquippedWeapon->MagCapacity) return;
 	if (!EquippedWeapon->bInfiniteAmmo && Character->ReserveAmmo <= 0) return;
 
+	if (Character->GetAimState() == EAimState::ADS)
+	{
+		Character->DoADSEnd();
+	}
+
 	bReloading = true;
 
 	if (Character->HasAuthority())
 	{
 		GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
-		MulticastReload(true);
+		MulticastReload(true, EquippedWeapon->ReloadTime);
 	}
 	else
 	{
@@ -224,14 +229,14 @@ void UCombatComponent::ServerReload_Implementation()
 
 	bReloading = true;
 	GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
-	MulticastReload(true);
+	MulticastReload(true, EquippedWeapon->ReloadTime);
 }
 
-void UCombatComponent::MulticastReload_Implementation(bool bPlay)
+void UCombatComponent::MulticastReload_Implementation(bool bPlay, float ReloadTime)
 {
 	if (Character)
 	{
-		Character->PlayReloadMontage(bPlay);
+		Character->PlayReloadMontage(bPlay, ReloadTime);
 	}
 }
 
@@ -287,7 +292,7 @@ void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_Ne
 		{
 			bReloading = false;
 			GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
-			MulticastReload(false);
+			MulticastReload(false, 0.f);
 		}
 
 		if (EquippedWeapon && EquippedWeapon->Ammo > 0)

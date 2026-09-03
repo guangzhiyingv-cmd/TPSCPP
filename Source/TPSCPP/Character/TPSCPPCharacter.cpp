@@ -479,7 +479,7 @@ void ATPSCPPCharacter::DoShoulderAimEnd()
 
 void ATPSCPPCharacter::DoADSStart()
 {
-	if (AimState != EAimState::Hipfire || !HasEquippedWeapon())
+	if (AimState != EAimState::Hipfire || !HasEquippedWeapon() || IsReloading())
 	{
 		return;
 	}
@@ -562,7 +562,7 @@ void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
 	}
 }
 
-void ATPSCPPCharacter::PlayReloadMontage(bool bPlay)
+void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
 {
 	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
 
@@ -570,7 +570,8 @@ void ATPSCPPCharacter::PlayReloadMontage(bool bPlay)
 	{
 		if (ReloadMontage)
 		{
-			GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage);
+			float PlayRate = ReloadMontage->GetSectionLength(0) / ReloadTime;
+			GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage, PlayRate);
 		}
 	}
 	else
@@ -703,10 +704,12 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 
 void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
 {
-	if (ViewModelWeapon)
+	if (!ViewModelWeapon || !Combat) return;
+
+	if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 	{
 		ViewModelWeapon->SetRelativeLocation(
-			FMath::Lerp(FPSWeaponStartLocation, FPSWeaponRelativeLocation, Value));
+			FMath::Lerp(FPSWeaponStartLocation, Weapon->FPSWeaponRelativeLocation, Value));
 	}
 }
 
