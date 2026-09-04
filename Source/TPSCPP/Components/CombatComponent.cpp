@@ -3,6 +3,7 @@
 #include "PlayerController/TPSCPPPlayerController.h"
 #include "HUD/PlayerHUD.h"
 #include "TPSCPP.h"
+#include "Engine/Engine.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
@@ -26,6 +27,7 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 
 	SetHUDCrosshairs(DeltaTime);
 }
+
 
 void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -70,6 +72,8 @@ void UCombatComponent::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
 		LastWeapon->ShowPickupWidget(false);
 	}
 }
+
+
 
 void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 {
@@ -197,6 +201,108 @@ void UCombatComponent::FireTimerFinished()
 	}
 }
 
+void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
+{
+	if (bPressed)
+	{
+		// Firing cancels an in-progress reload
+		if (bReloading)
+		{
+			bReloading = false;
+			GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+			MulticastReload(false, 0.f);
+		}
+
+		if (EquippedWeapon && EquippedWeapon->Ammo > 0)
+		{
+			EquippedWeapon->SetAmmo(EquippedWeapon->Ammo - 1);
+			UpdateAmmoHUD();
+		}
+	}
+	MulticastFire(bPressed, InHitTarget);
+}
+
+void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
+{
+	if (!EquippedWeapon) return;
+	if (Character)
+	{
+		EquippedWeapon->Fire(bPressed, InHitTarget);
+		Character->PlayFireMontage(bPressed);
+		if (bPressed)
+		{
+			float PlayRate = 1.0f / EquippedWeapon->FireDelay;
+			Character->PlayADSRecoil(PlayRate);
+		}
+	}
+}
+
+
+void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
+{
+	FVector2D ViewportSize = FVector2D::ZeroVector;
+	if (GEngine && GEngine->GameViewport)
+	{
+		GEngine->GameViewport->GetViewportSize(ViewportSize);
+	}
+	FVector2D CrosshairLocation(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
+	FVector CrosshairWorldPosition;
+	FVector CrosshairWorldDirection;
+	
+	CrosshairLocation += FMath::RandPointInCircle(ShootingSpread);		//Random Spread Shooting
+	
+	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
+		UGameplayStatics::GetPlayerController(this, 0),
+		CrosshairLocation,
+		CrosshairWorldPosition,
+		CrosshairWorldDirection
+  	);
+  	if (bScreenToWorld)
+  	{
+  		// Start the trace at the character's position along the crosshair direction
+  		// to avoid picking hit points between the camera and the pawn
+  		float CameraToCharacterDistance = FVector::Dist(CrosshairWorldPosition, Character->GetActorLocation()) + 50.f;
+  		FVector Start = CrosshairWorldPosition + CrosshairWorldDirection * CameraToCharacterDistance;
+  		FVector End = CrosshairWorldPosition + CrosshairWorldDirection * TRACE_LENGTH;
+
+  		// Trace multiple channels and keep the closest hit
+  		FHitResult VisibilityHit;
+  		FHitResult SkeletalHit;
+  		bool bVisHit = GetWorld()->LineTraceSingleByChannel(VisibilityHit, Start, End, ECC_Visibility);
+  		bool bSkelHit = GetWorld()->LineTraceSingleByChannel(SkeletalHit, Start, End, ECC_SkeletalMesh);
+
+  		const FHitResult* ClosestHit = nullptr;
+  		if (bVisHit && bSkelHit)
+  		{
+  			ClosestHit = (VisibilityHit.ImpactPoint - Start).SizeSquared() < (SkeletalHit.ImpactPoint - Start).SizeSquared()
+  				? &VisibilityHit : &SkeletalHit;
+  		}
+  		else if (bVisHit)
+  		{
+  			ClosestHit = &VisibilityHit;
+  		}
+  		else if (bSkelHit)
+  		{
+  			ClosestHit = &SkeletalHit;
+  		}
+
+  		if (ClosestHit)
+  		{
+  			TraceHitResult = *ClosestHit;
+  			HitTarget = ClosestHit->ImpactPoint;
+  		}
+  		else
+  		{
+  			TraceHitResult.ImpactPoint = End;
+  			HitTarget = End;
+  		}
+
+  		// Move the fire target slightly forward along the screen-center ray
+  		HitTarget += CrosshairWorldDirection * 15.f;
+  	}
+	
+}
+
 void UCombatComponent::StartReload()
 {
 	if (!EquippedWeapon || !Character || bReloading) return;
@@ -273,98 +379,9 @@ void UCombatComponent::MulticastReloadFinished_Implementation()
 	}
 }
 
-void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
-{
-	if (!EquippedWeapon) return;
-	if (Character)
-	{
-		EquippedWeapon->Fire(bPressed, InHitTarget);
-		Character->PlayFireMontage(bPressed);
-	}
-}
 
-void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
-{
-	if (bPressed)
-	{
-		// Firing cancels an in-progress reload
-		if (bReloading)
-		{
-			bReloading = false;
-			GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
-			MulticastReload(false, 0.f);
-		}
 
-		if (EquippedWeapon && EquippedWeapon->Ammo > 0)
-		{
-			EquippedWeapon->SetAmmo(EquippedWeapon->Ammo - 1);
-			UpdateAmmoHUD();
-		}
-	}
-	MulticastFire(bPressed, InHitTarget);
-}
 
-void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
-{
-	FVector2D ViewportSize;
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(ViewportSize);
-	}
-	FVector2D CrosshairLocation(ViewportSize.X / 2.f, ViewportSize.Y / 2.f);
-	FVector CrosshairWorldPosition;
-	FVector CrosshairWorldDirection;
-	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
-		UGameplayStatics::GetPlayerController(this, 0),
-		CrosshairLocation,
-		CrosshairWorldPosition,
-		CrosshairWorldDirection
-  	);
-  	if (bScreenToWorld)
-  	{
-  		// Start the trace at the character's position along the crosshair direction
-  		// to avoid picking hit points between the camera and the pawn
-  		float CameraToCharacterDistance = FVector::Dist(CrosshairWorldPosition, Character->GetActorLocation()) + 50.f;
-  		FVector Start = CrosshairWorldPosition + CrosshairWorldDirection * CameraToCharacterDistance;
-  		FVector End = CrosshairWorldPosition + CrosshairWorldDirection * TRACE_LENGTH;
-
-  		// Trace multiple channels and keep the closest hit
-  		FHitResult VisibilityHit;
-  		FHitResult SkeletalHit;
-  		bool bVisHit = GetWorld()->LineTraceSingleByChannel(VisibilityHit, Start, End, ECC_Visibility);
-  		bool bSkelHit = GetWorld()->LineTraceSingleByChannel(SkeletalHit, Start, End, ECC_SkeletalMesh);
-
-  		const FHitResult* ClosestHit = nullptr;
-  		if (bVisHit && bSkelHit)
-  		{
-  			ClosestHit = (VisibilityHit.ImpactPoint - Start).SizeSquared() < (SkeletalHit.ImpactPoint - Start).SizeSquared()
-  				? &VisibilityHit : &SkeletalHit;
-  		}
-  		else if (bVisHit)
-  		{
-  			ClosestHit = &VisibilityHit;
-  		}
-  		else if (bSkelHit)
-  		{
-  			ClosestHit = &SkeletalHit;
-  		}
-
-  		if (ClosestHit)
-  		{
-  			TraceHitResult = *ClosestHit;
-  			HitTarget = ClosestHit->ImpactPoint;
-  		}
-  		else
-  		{
-  			TraceHitResult.ImpactPoint = End;
-  			HitTarget = End;
-  		}
-
-  		// Move the fire target slightly forward along the screen-center ray
-  		HitTarget += CrosshairWorldDirection * 15.f;
-  	}
-	
-}
 
 
 
@@ -448,7 +465,8 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 			default:
 				break;
 			}
-			HUDPackage.CrosshairSpread = FMath::Max(Spread, 0.f);
+			ShootingSpread = FMath::Max(Spread, 0.f);
+			HUDPackage.CrosshairSpread = ShootingSpread;
 
 			HUD->SetHUDPackage(HUDPackage);
 		}
@@ -476,3 +494,6 @@ void UCombatComponent::UpdateAmmoHUD()
 		}
 	}
 }
+
+
+

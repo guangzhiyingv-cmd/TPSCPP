@@ -246,6 +246,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoReload();
 
+	/** Plays the local ADS weapon recoil animation when firing while aiming. */
+	void PlayADSRecoil(float PlayRate);
+
 	/** Plays or stops the fire montage on the character mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	void PlayFireMontage(bool bPlay);
@@ -313,6 +316,10 @@ protected:
 	UPROPERTY()
 	UTimelineComponent* ADSTimeline;
 
+	/** Timeline for the local ADS weapon recoil while firing. */
+	UPROPERTY()
+	UTimelineComponent* ADSRecoilTimeline;
+
 	/** Curve asset controlling the camera transition. Create CT_CameraTransition in Content Browser and assign here. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	UCurveFloat* CameraCurveFloat;
@@ -320,6 +327,10 @@ protected:
 	/** Curve asset controlling the ADS weapon raise animation. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	UCurveFloat* ADSWeaponCurveFloat;
+
+	/** Curve asset controlling the local ADS weapon recoil. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	UCurveFloat* ADSRecoilCurve;
 
 	/** Timeline progress callback: interpolates camera parameters. */
 	UFUNCTION()
@@ -332,6 +343,10 @@ protected:
 	/** Timeline progress callback for the ADS weapon animation. */
 	UFUNCTION()
 	void ADSWeaponTimelineUpdate(float Value);
+
+	/** Timeline progress callback for the local ADS weapon recoil. */
+	UFUNCTION()
+	void ADSRecoilTimelineUpdate(float Value);
 
 	/** Current aiming state. Hipfire is the base state; Shoulder and ADS cannot switch directly. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
@@ -452,6 +467,7 @@ public:
 
 	UFUNCTION()
 	void Elim();	//GameMode call this function so it only runs on the server
+
 
 protected:
 	//Poll for any relelvant classes and initialize our HUD

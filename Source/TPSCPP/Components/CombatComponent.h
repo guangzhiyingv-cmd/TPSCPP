@@ -46,6 +46,7 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	friend class ATPSCPPCharacter;
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
@@ -128,6 +129,9 @@ private:
 
 	/** Current aim spread reduction, interpolated toward the aim state's target each frame. */
 	float AimSpreadReduction = 0.f;
+	
+	//Shooting Spread
+	float ShootingSpread = 0.f;
 
 	/** Replicated only to the owning client when it changes. */
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)

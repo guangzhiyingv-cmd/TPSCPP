@@ -71,6 +71,8 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	ADSTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("ADSTimeline"));
 
+	ADSRecoilTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("ADSRecoilTimeline"));
+
 	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
 	CustomMesh->SetupAttachment(GetMesh());
 	CustomMesh->SetCollisionObjectType(ECC_SkeletalMesh);
@@ -150,6 +152,14 @@ void ATPSCPPCharacter::PostInitializeComponents()
 		ADSProgress.BindUFunction(this, FName("ADSWeaponTimelineUpdate"));
 		ADSTimeline->AddInterpFloat(ADSWeaponCurveFloat, ADSProgress);
 		ADSTimeline->SetLooping(false);
+	}
+
+	if (ADSRecoilCurve && ADSRecoilTimeline)
+	{
+		FOnTimelineFloat ADSRecoilProgress;
+		ADSRecoilProgress.BindUFunction(this, FName("ADSRecoilTimelineUpdate"));
+		ADSRecoilTimeline->AddInterpFloat(ADSRecoilCurve, ADSRecoilProgress);
+		ADSRecoilTimeline->SetLooping(false);
 	}
 }
 
@@ -515,7 +525,7 @@ void ATPSCPPCharacter::DoADSToggle()
 
 void ATPSCPPCharacter::DoFirePressed()
 {
-	if (Combat && HasEquippedWeapon())
+	if (Combat && HasEquippedWeapon() && !bEliminated)
 	{
 		// Cancel sprinting before firing
 		if (bIsSprinting)
@@ -536,7 +546,7 @@ void ATPSCPPCharacter::DoFireReleased()
 
 void ATPSCPPCharacter::DoReload()
 {
-	if (Combat)
+	if (Combat && !bEliminated)
 	{
 		Combat->StartReload();
 	}
@@ -637,6 +647,11 @@ void ATPSCPPCharacter::DoADSEnd()
 
 		ADSTimeline->Stop();
 
+		if (ADSRecoilTimeline)
+		{
+			ADSRecoilTimeline->Stop();
+		}
+
 		CameraTimeline->SetPlayRate(2.f);
 		CameraTimeline->Reverse();
 	}
@@ -710,6 +725,27 @@ void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
 	{
 		ViewModelWeapon->SetRelativeLocation(
 			FMath::Lerp(FPSWeaponStartLocation, Weapon->FPSWeaponRelativeLocation, Value));
+	}
+}
+
+void ATPSCPPCharacter::PlayADSRecoil(float PlayRate)
+{
+	if (!IsLocallyControlled() || AimState != EAimState::ADS || !ADSRecoilTimeline) return;
+
+	ADSRecoilTimeline->SetPlayRate(PlayRate);
+	ADSRecoilTimeline->PlayFromStart();
+}
+
+void ATPSCPPCharacter::ADSRecoilTimelineUpdate(float Value)
+{
+	if (!Combat || !ViewModelWeapon) return;
+
+	if (AWeapon* Weapon = Combat->GetEquippedWeapon())
+	{
+		FVector StartLocation = Weapon->FPSWeaponRelativeLocation;
+		FVector EndLocation = StartLocation + FVector(-3.0f, 0.0f, 0.0f);
+		FVector TargetLocation =  FMath::Lerp(StartLocation, EndLocation, Value);
+		ViewModelWeapon->SetRelativeLocation(TargetLocation);
 	}
 }
 
@@ -822,10 +858,11 @@ void ATPSCPPCharacter::MulticastElim_Implementation()
 	// Stop movement and input so the eliminated character cannot keep acting
 	GetCharacterMovement()->DisableMovement();
 	GetCharacterMovement()->StopMovementImmediately();
-	if (GetController())
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
-		GetController()->SetIgnoreMoveInput(true);
-		GetController()->SetIgnoreLookInput(true);
+		//PC->SetIgnoreMoveInput(true);
+		//PC->SetIgnoreLookInput(true);
+		DisableInput(PC);
 	}
 
 	// Stop firing if the fire button was held
@@ -845,6 +882,7 @@ void ATPSCPPCharacter::MulticastElim_Implementation()
 	if (Combat)
 	{
 		Combat->DropEquippedWeapon();
+		Combat->bCanFire = false;
 	}
 
 	// Turn the mesh into a ragdoll
