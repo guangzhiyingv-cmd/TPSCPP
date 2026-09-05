@@ -249,6 +249,12 @@ public:
 	/** Plays the local ADS weapon recoil animation when firing while aiming. */
 	void PlayADSRecoil(float PlayRate);
 
+	/** Captures the current camera offset as the starting point for a new fire burst. */
+	void StartWeaponRecoilBurst();
+
+	/** Applies the equipped weapon's camera recoil for the current shot. */
+	void ApplyWeaponRecoil(bool bUseContinuousRecoil, float ContinuousFireTime);
+
 	/** Plays or stops the fire montage on the character mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	void PlayFireMontage(bool bPlay);
@@ -410,6 +416,21 @@ private:
 
 	/** Whether this character has already been eliminated. */
 	bool bEliminated = false;
+
+	/** Actual pitch applied by the most recent shot. */
+	float LastShotAppliedPitch = 0.f;
+
+	/** Interpolation progress of the delayed reverse recoil. */
+	float RecoilReturnProgress = 0.f;
+
+	/** Amount of the reverse recoil already applied to the camera. */
+	float AppliedRecoilReturn = 0.f;
+
+	/** Time since the fire button was released. */
+	float TimeSinceFireEnded = 0.f;
+
+	/** Updates the delayed reverse vertical recoil each tick. */
+	void UpdateRecoilReturn(float DeltaTime);
 
 	/** Destroys the actor after the elimination delay. */
 	void ElimTimerFinished();

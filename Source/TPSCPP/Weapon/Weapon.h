@@ -145,6 +145,42 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ADS", meta = (ClampMin = 0.1, ClampMax = 5.0))
 	float ADSSensitivity = 0.5f;
 
+	/** Horizontal camera kick magnitude for a single shot. Direction is randomly left or right. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float SingleShotHorizontalRecoil = 0.05f;
+
+	/** Vertical camera kick magnitude for a single shot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float SingleShotVerticalRecoil = 0.3f;
+
+	/** Continuous fire horizontal recoil by time held. X is seconds since sustained fire began. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
+	class UCurveFloat* AutoRecoilHorizontalCurve;
+
+	/** Continuous fire vertical recoil by time held. X is seconds since sustained fire began. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil")
+	class UCurveFloat* AutoRecoilVerticalCurve;
+
+	/** Random perturbation added to the horizontal recoil magnitude each shot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float HorizontalRecoilPerturbation = 0.01f;
+
+	/** Random perturbation added to the vertical recoil each shot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float VerticalRecoilPerturbation = 0.05f;
+
+	/** Interpolation speed for the delayed reverse recoil. Higher returns faster. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float RecoilRecoverySpeed = 4.f;
+
+	/** Delay after releasing fire before recovery starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0))
+	float RecoilRecoveryDelay = 0.1f;
+
+	/** 1 returns the last shot's full vertical recoil, 0.6 returns 60%. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recoil", meta = (ClampMin = 0, ClampMax = 1))
+	float VerticalRecoilRecoveryMultiplier = 0.7f;
+
 	FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
 
 

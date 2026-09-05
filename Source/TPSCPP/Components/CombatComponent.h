@@ -66,6 +66,10 @@ private:
 
 	void FireButtonPressed(bool bPressed);
 	bool bFireButtonPressed;
+	/** True after automatic fire continues from the first shot. */
+	bool bUseContinuousRecoil = false;
+	/** Time accumulated while holding automatic fire. Used as the recoil curve X value. */
+	float ContinuousFireTime = 0.f;
 	bool bCanFire = true;
 	FTimerHandle FireTimer;
 

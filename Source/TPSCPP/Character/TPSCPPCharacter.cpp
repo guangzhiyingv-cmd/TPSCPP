@@ -123,6 +123,7 @@ void ATPSCPPCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	PollInit();
+	UpdateRecoilReturn(DeltaTime);
 }
 
 void ATPSCPPCharacter::PostInitializeComponents()
@@ -726,6 +727,93 @@ void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
 		ViewModelWeapon->SetRelativeLocation(
 			FMath::Lerp(FPSWeaponStartLocation, Weapon->FPSWeaponRelativeLocation, Value));
 	}
+}
+
+void ATPSCPPCharacter::ApplyWeaponRecoil(bool bUseContinuousRecoil, float ContinuousFireTime)
+{
+	if (!IsLocallyControlled() || !Combat) return;
+
+	AWeapon* Weapon = Combat->GetEquippedWeapon();
+	if (!Weapon) return;
+
+	float HorizontalMagnitude = Weapon->SingleShotHorizontalRecoil;
+	float VerticalMagnitude = Weapon->SingleShotVerticalRecoil;
+
+	if (bUseContinuousRecoil)
+	{
+		if (Weapon->AutoRecoilHorizontalCurve)
+		{
+			HorizontalMagnitude += Weapon->AutoRecoilHorizontalCurve->GetFloatValue(ContinuousFireTime);
+		}
+
+		if (Weapon->AutoRecoilVerticalCurve)
+		{
+			VerticalMagnitude += Weapon->AutoRecoilVerticalCurve->GetFloatValue(ContinuousFireTime);
+		}
+	}
+
+	HorizontalMagnitude += FMath::RandRange(
+		-Weapon->HorizontalRecoilPerturbation,
+		Weapon->HorizontalRecoilPerturbation);
+	HorizontalMagnitude = FMath::Max(0.f, HorizontalMagnitude);
+
+	const float HorizontalDirection = FMath::RandBool() ? 1.f : -1.f;
+	const float HorizontalRecoil = HorizontalMagnitude * HorizontalDirection;
+
+	VerticalMagnitude += FMath::RandRange(
+		-Weapon->VerticalRecoilPerturbation,
+		Weapon->VerticalRecoilPerturbation);
+
+	const float AppliedPitch = -VerticalMagnitude;
+
+	AddControllerYawInput(HorizontalRecoil);
+	AddControllerPitchInput(AppliedPitch);
+
+	LastShotAppliedPitch = AppliedPitch;
+	TimeSinceFireEnded = 0.f;
+}
+
+void ATPSCPPCharacter::StartWeaponRecoilBurst()
+{
+	LastShotAppliedPitch = 0.f;
+	RecoilReturnProgress = 0.f;
+	AppliedRecoilReturn = 0.f;
+	TimeSinceFireEnded = 0.f;
+}
+
+void ATPSCPPCharacter::UpdateRecoilReturn(float DeltaTime)
+{
+	if (!IsLocallyControlled() || !Combat) return;
+
+	AWeapon* Weapon = Combat->GetEquippedWeapon();
+	if (!Weapon) return;
+
+	if (Combat->bFireButtonPressed)
+	{
+		TimeSinceFireEnded = 0.f;
+		RecoilReturnProgress = 0.f;
+		AppliedRecoilReturn = 0.f;
+		return;
+	}
+
+	TimeSinceFireEnded += DeltaTime;
+	if (TimeSinceFireEnded < Weapon->RecoilRecoveryDelay) return;
+	if (Weapon->RecoilRecoverySpeed <= 0.f) return;
+	if (FMath::IsNearlyZero(LastShotAppliedPitch)) return;
+	if (Weapon->VerticalRecoilRecoveryMultiplier <= 0.f) return;
+
+	const float TotalVerticalReturn = -LastShotAppliedPitch * Weapon->VerticalRecoilRecoveryMultiplier;
+	RecoilReturnProgress = FMath::FInterpTo(
+		RecoilReturnProgress,
+		1.f,
+		DeltaTime,
+		Weapon->RecoilRecoverySpeed);
+
+	const float NewAppliedReturn = TotalVerticalReturn * RecoilReturnProgress;
+	const float AppliedReturn = NewAppliedReturn - AppliedRecoilReturn;
+	AppliedRecoilReturn = NewAppliedReturn;
+
+	AddControllerPitchInput(AppliedReturn);
 }
 
 void ATPSCPPCharacter::PlayADSRecoil(float PlayRate)

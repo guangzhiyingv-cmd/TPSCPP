@@ -144,6 +144,14 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 
 	if (bPressed)
 	{
+		if (Character)
+		{
+			Character->StartWeaponRecoilBurst();
+		}
+
+		bUseContinuousRecoil = false;
+		ContinuousFireTime = 0.f;
+
 		if (bCanFire && EquippedWeapon)
 		{
 			Fire();
@@ -165,6 +173,12 @@ void UCombatComponent::Fire()
 
 	FHitResult TraceHitResult;
 	TraceUnderCrosshairs(TraceHitResult);
+	if (Character)
+	{
+		Character->ApplyWeaponRecoil(
+			EquippedWeapon->bAutomatic && bFireButtonPressed && bUseContinuousRecoil,
+			ContinuousFireTime);
+	}
 	ServerFire(true, HitTarget);
 	StartFireTimer();
 }
@@ -197,6 +211,8 @@ void UCombatComponent::FireTimerFinished()
 	// Continue firing while the button is held and the weapon supports full auto
 	if (EquippedWeapon->bAutomatic && bFireButtonPressed)
 	{
+		bUseContinuousRecoil = true;
+		ContinuousFireTime += EquippedWeapon->FireDelay;
 		Fire();
 	}
 }
