@@ -3,6 +3,7 @@
 #include "TPSCPPCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
@@ -14,6 +15,8 @@
 #include "PlayerController/TPSCPPPlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimInstance.h"
+#include "UObject/UnrealType.h"
+#include "Damage/DamageZoneMultiplier.h"
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
@@ -73,10 +76,6 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	ADSRecoilTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("ADSRecoilTimeline"));
 
-	CustomMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CustomMesh"));
-	CustomMesh->SetupAttachment(GetMesh());
-	CustomMesh->SetCollisionObjectType(ECC_SkeletalMesh);
-
 	ViewModelWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ViewModelWeapon"));
 	ViewModelWeapon->SetupAttachment(FPS_Camera);
 	ViewModelWeapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -86,7 +85,6 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	// Ignore camera channel on all character collision components to prevent camera clipping
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 	GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
-	CustomMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
@@ -107,8 +105,12 @@ void ATPSCPPCharacter::BeginPlay()
 	UpdateHUDHealth();
 	if (HasAuthority())
 	{
+		// Point damage is broadcast first and records the hit zone multiplier used below.
+		OnTakePointDamage.AddDynamic(this, &ATPSCPPCharacter::CacheHitZoneDamageMultiplier);
 		OnTakeAnyDamage.AddDynamic(this, &ATPSCPPCharacter::ReceiveDamage); 
 	}
+
+	LinkAnimLayer(DefaultAnimLayer);
 }
 
 
@@ -124,6 +126,7 @@ void ATPSCPPCharacter::Tick(float DeltaTime)
 
 	PollInit();
 	UpdateRecoilReturn(DeltaTime);
+	PushAnimStateToAnimInstance();
 }
 
 void ATPSCPPCharacter::PostInitializeComponents()
@@ -134,6 +137,8 @@ void ATPSCPPCharacter::PostInitializeComponents()
 	{
 		Combat->Character = this;
 	}
+
+	ResolveCustomMesh();
 
 	if (CameraCurveFloat && CameraTimeline)
 	{
@@ -162,6 +167,137 @@ void ATPSCPPCharacter::PostInitializeComponents()
 		ADSRecoilTimeline->AddInterpFloat(ADSRecoilCurve, ADSRecoilProgress);
 		ADSRecoilTimeline->SetLooping(false);
 	}
+}
+
+void ATPSCPPCharacter::SetCustomMesh(USkeletalMeshComponent* InCustomMesh)
+{
+	CustomMesh = IsValid(InCustomMesh) ? InCustomMesh : nullptr;
+
+	if (CustomMesh)
+	{
+		CustomMesh->SetCollisionObjectType(ECC_SkeletalMesh);
+		CustomMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	}
+}
+
+bool ATPSCPPCharacter::ResolveCustomMesh()
+{
+	if (CustomMeshComponentTag.IsNone())
+	{
+		SetCustomMesh(nullptr);
+		UE_LOG(LogTPSCPP, Error, TEXT("'%s' CustomMeshComponentTag is not configured."), *GetNameSafe(this));
+		return false;
+	}
+
+	USkeletalMeshComponent* FoundMesh = FindComponentByTag<USkeletalMeshComponent>(CustomMeshComponentTag);
+	if (!FoundMesh || FoundMesh == GetMesh())
+	{
+		SetCustomMesh(nullptr);
+		UE_LOG(
+			LogTPSCPP,
+			Error,
+			TEXT("'%s' could not find a valid SkeletalMeshComponent tagged '%s'."),
+			*GetNameSafe(this),
+			*CustomMeshComponentTag.ToString());
+		return false;
+	}
+
+	SetCustomMesh(FoundMesh);
+	return true;
+}
+
+void ATPSCPPCharacter::LinkAnimLayer(TSubclassOf<UAnimInstance> AnimLayerClass)
+{
+	if (CurrentAnimLayer == AnimLayerClass)
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* AnimMesh = GetMesh();
+	UAnimInstance* AnimInstance = AnimMesh ? AnimMesh->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	if (CurrentAnimLayer)
+	{
+		AnimInstance->UnlinkAnimClassLayers(CurrentAnimLayer);
+	}
+
+	CurrentAnimLayer = AnimLayerClass;
+
+	if (CurrentAnimLayer)
+	{
+		AnimInstance->LinkAnimClassLayers(CurrentAnimLayer);
+	}
+}
+
+void ATPSCPPCharacter::UnlinkAnimLayer()
+{
+	LinkAnimLayer(DefaultAnimLayer);
+}
+
+void ATPSCPPCharacter::NotifyWeaponFired()
+{
+	if (const UWorld* World = GetWorld())
+	{
+		LastFireTime = World->GetTimeSeconds();
+	}
+}
+
+bool ATPSCPPCharacter::IsFiring() const
+{
+	const UWorld* World = GetWorld();
+	return World != nullptr && (World->GetTimeSeconds() - LastFireTime) <= FiringStateDuration;
+}
+
+void ATPSCPPCharacter::PushAnimStateToAnimInstance()
+{
+	USkeletalMeshComponent* AnimMesh = GetMesh();
+	UAnimInstance* AnimInstance = AnimMesh ? AnimMesh->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	// The anim blueprint owns these as gameplay-tag bound variables, so resolve them by name once per anim class.
+	if (CachedAnimStateClass != AnimInstance->GetClass())
+	{
+		CachedAnimStateClass = AnimInstance->GetClass();
+		CachedAnimStateProperties.Reset();
+
+		static const FName AnimStatePropertyNames[] =
+		{
+			TEXT("GameplayTag_IsFiring"),
+			TEXT("GameplayTag_IsADS"),
+			TEXT("GameplayTag_IsReloading"),
+			TEXT("GameplayTag_IsDashing"),
+			TEXT("GameplayTag_IsMelee")
+		};
+
+		for (const FName& PropertyName : AnimStatePropertyNames)
+		{
+			if (FBoolProperty* Property = FindFProperty<FBoolProperty>(CachedAnimStateClass, PropertyName))
+			{
+				CachedAnimStateProperties.Add(PropertyName, Property);
+			}
+		}
+	}
+
+	auto ApplyState = [this, AnimInstance](const FName& PropertyName, bool bValue)
+	{
+		if (FBoolProperty* const* Found = CachedAnimStateProperties.Find(PropertyName))
+		{
+			(*Found)->SetPropertyValue_InContainer(AnimInstance, bValue);
+		}
+	};
+
+	ApplyState(TEXT("GameplayTag_IsFiring"), IsFiring());
+	ApplyState(TEXT("GameplayTag_IsADS"), AimState == EAimState::ADS);
+	ApplyState(TEXT("GameplayTag_IsReloading"), IsReloading());
+	ApplyState(TEXT("GameplayTag_IsDashing"), bIsSprinting);
+	ApplyState(TEXT("GameplayTag_IsMelee"), false);
 }
 
 void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -335,7 +471,8 @@ void ATPSCPPCharacter::GetLeftHandSocketData(
 	OutXAxis = FVector::ZeroVector;
 	OutZAxis = FVector::ZeroVector;
 
-	if (!Combat || !CustomMesh)
+	USkeletalMeshComponent* CustomMeshComponent = GetCustomMesh();
+	if (!Combat || !CustomMeshComponent)
 	{
 		return;
 	}
@@ -347,7 +484,7 @@ void ATPSCPPCharacter::GetLeftHandSocketData(
 	}
 
 	const FTransform SocketWorld = Weapon->WeaponMesh->GetSocketTransform(TEXT("LeftHandSocket"), RTS_World);
-	const FTransform CustomMeshWorld = CustomMesh->GetComponentTransform();
+	const FTransform CustomMeshWorld = CustomMeshComponent->GetComponentTransform();
 
 	OutRelativeTransform = SocketWorld.GetRelativeTransform(CustomMeshWorld);
 
@@ -553,26 +690,6 @@ void ATPSCPPCharacter::DoReload()
 	}
 }
 
-void ATPSCPPCharacter::PlayFireMontage(bool bPlay)
-{
-	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
-
-	if (bPlay)
-	{
-		if (FireMontage)
-		{
-			GetMesh()->GetAnimInstance()->Montage_Play(FireMontage);
-		}
-	}
-	else
-	{
-		if (FireMontage)
-		{
-			GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, FireMontage);
-		}
-	}
-}
-
 void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
 {
 	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
@@ -634,7 +751,10 @@ void ATPSCPPCharacter::DoADSEnd()
 
 	if (IsLocallyControlled())
 	{
-		CustomMesh->SetVisibility(true);
+		if (USkeletalMeshComponent* CustomMeshComponent = GetCustomMesh())
+		{
+			CustomMeshComponent->SetVisibility(true);
+		}
 
 		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
@@ -698,7 +818,10 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 		bPendingADS = false;
 		FollowCamera->SetActive(false);
 		FPS_Camera->SetActive(true);
-		CustomMesh->SetVisibility(false);
+		if (USkeletalMeshComponent* CustomMeshComponent = GetCustomMesh())
+		{
+			CustomMeshComponent->SetVisibility(false);
+		}
 
 		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
@@ -886,9 +1009,40 @@ bool ATPSCPPCharacter::Server_SetAimState_Validate(EAimState NewState)
 
 
 
+float ATPSCPPCharacter::ResolveZoneDamageMultiplier(FName BoneName) const
+{
+	// Fall back to the default multiplier whenever the table or the bone lookup is unavailable.
+	if (!DamageZoneTable || BoneName.IsNone())
+	{
+		return FMath::Max(DefaultDamageMultiplier, 0.f);
+	}
+
+	static const FString ContextString(TEXT("ATPSCPPCharacter::ResolveZoneDamageMultiplier"));
+	const FDamageZoneMultiplier* Row = DamageZoneTable->FindRow<FDamageZoneMultiplier>(BoneName, ContextString, /*bWarnIfRowMissing=*/false);
+	if (!Row)
+	{
+		return FMath::Max(DefaultDamageMultiplier, 0.f);
+	}
+
+	return FMath::Max(Row->DamageMultiplier, 0.f);
+}
+
+void ATPSCPPCharacter::CacheHitZoneDamageMultiplier(AActor* DamagedActor, float Damage, AController* InstigatedBy, FVector HitLocation,
+	UPrimitiveComponent* FHitComponent, FName BoneName, FVector ShotFromDirection,
+	const UDamageType* DamageType, AActor* DamageCauser)
+{
+	PendingZoneDamageMultiplier = ResolveZoneDamageMultiplier(BoneName);
+	bHasPendingZoneDamageMultiplier = true;
+}
+
 void ATPSCPPCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
 {
-	Health = FMath::Clamp(Health - Damage, 0.f, MaxHealth);
+	// Point damage is broadcast before generic damage, so the hit zone multiplier is already resolved.
+	const float ZoneMultiplier = bHasPendingZoneDamageMultiplier ? PendingZoneDamageMultiplier : 1.f;
+	bHasPendingZoneDamageMultiplier = false;
+	PendingZoneDamageMultiplier = 1.f;
+
+	Health = FMath::Clamp(Health - Damage * ZoneMultiplier, 0.f, MaxHealth);
 
 	if (HasAuthority())
 	{
@@ -964,7 +1118,10 @@ void ATPSCPPCharacter::MulticastElim_Implementation()
 
 	// Disable capsule and child mesh collision queries so the corpse cannot block or be picked up
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	CustomMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (USkeletalMeshComponent* CustomMeshComponent = GetCustomMesh())
+	{
+		CustomMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 
 	// Drop the equipped weapon so it falls as a physical pickup instead of floating on the ragdoll
 	if (Combat)
@@ -1012,9 +1169,12 @@ void ATPSCPPCharacter::StartDissolve()
 	{
 		DissolveMIs.Add(GetMesh()->CreateAndSetMaterialInstanceDynamic(i));
 	}
-	for (int32 i = 0; i < CustomMesh->GetNumMaterials(); ++i)
+	if (USkeletalMeshComponent* CustomMeshComponent = GetCustomMesh())
 	{
-		DissolveMIs.Add(CustomMesh->CreateAndSetMaterialInstanceDynamic(i));
+		for (int32 i = 0; i < CustomMeshComponent->GetNumMaterials(); ++i)
+		{
+			DissolveMIs.Add(CustomMeshComponent->CreateAndSetMaterialInstanceDynamic(i));
+		}
 	}
 
 	DissolveTrack.BindDynamic(this, &ATPSCPPCharacter::UpdateDissolveMaterial);

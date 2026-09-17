@@ -79,6 +79,19 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 {
 	if (!Character || !WeaponToEquip) return;
 
+	USkeletalMeshComponent* CustomMesh = Character->GetCustomMesh();
+	if (!CustomMesh)
+	{
+		Character->ResolveCustomMesh();
+		CustomMesh = Character->GetCustomMesh();
+	}
+
+	if (!CustomMesh)
+	{
+		UE_LOG(LogTPSCPP, Error, TEXT("'%s' cannot equip a weapon without a valid CustomMesh."), *GetNameSafe(Character));
+		return;
+	}
+
 	// Drop the currently equipped weapon if there is one
 	DropEquippedWeapon();
 
@@ -87,7 +100,7 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 	// Attach the weapon mesh to the character's right hand socket
 	EquippedWeapon->WeaponMesh->AttachToComponent(
-		Character->GetCustomMesh(),
+		CustomMesh,
 		FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 		TEXT("hand_rSocket"));
 
@@ -98,6 +111,7 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 	Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
 	Character->bIsEquipped = true;
+	Character->LinkAnimLayer(EquippedWeapon->GetAnimLayer());
 	UpdateAmmoHUD();
 }
 
@@ -112,6 +126,11 @@ void UCombatComponent::DropEquippedWeapon()
 	}
 
 	EquippedWeapon->Dropped();
+
+	if (Character)
+	{
+		Character->LinkAnimLayer(Character->GetDefaultAnimLayer());
+	}
 }
 
 void UCombatComponent::OnRep_EquippedWeapon()
@@ -120,14 +139,28 @@ void UCombatComponent::OnRep_EquippedWeapon()
 
 	if (EquippedWeapon)
 	{
+		USkeletalMeshComponent* CustomMesh = Character->GetCustomMesh();
+		if (!CustomMesh)
+		{
+			Character->ResolveCustomMesh();
+			CustomMesh = Character->GetCustomMesh();
+		}
+
+		if (!CustomMesh)
+		{
+			UE_LOG(LogTPSCPP, Error, TEXT("'%s' cannot attach the replicated weapon without a valid CustomMesh."), *GetNameSafe(Character));
+			return;
+		}
+
 		EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 		EquippedWeapon->WeaponMesh->AttachToComponent(
-			Character->GetCustomMesh(),
+			CustomMesh,
 			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 			TEXT("hand_rSocket"));
 		Character->bUseControllerRotationYaw = false;
 		Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
 		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+		Character->LinkAnimLayer(EquippedWeapon->GetAnimLayer());
 		UpdateAmmoHUD();
 	}
 }
@@ -244,9 +277,10 @@ void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector
 	if (Character)
 	{
 		EquippedWeapon->Fire(bPressed, InHitTarget);
-		Character->PlayFireMontage(bPressed);
 		if (bPressed)
 		{
+			EquippedWeapon->UpdateFiringTime();
+			Character->NotifyWeaponFired();
 			float PlayRate = 1.0f / EquippedWeapon->FireDelay;
 			Character->PlayADSRecoil(PlayRate);
 		}

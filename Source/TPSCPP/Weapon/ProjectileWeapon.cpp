@@ -41,3 +41,30 @@ void AProjectileWeapon::Fire(bool bPlay, const FVector& HitTarget)
 		}
 	}
 }
+
+void AProjectileWeapon::PrewarmFireAssets()
+{
+	Super::PrewarmFireAssets();
+
+	// Projectiles are only spawned on the server, so only prewarm there.
+	if (!HasAuthority() || !ProjectileClass)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const FVector PrewarmLocation = GetPrewarmLocation();
+	for (int32 Index = 0; Index < PrewarmSpawnCount; ++Index)
+	{
+		if (AProjectile* PrewarmProjectile = World->SpawnActor<AProjectile>(ProjectileClass, PrewarmLocation, FRotator::ZeroRotator))
+		{
+			PrewarmProjectile->SetPrewarmDummy(true);
+			PrewarmProjectile->Destroy();
+		}
+	}
+}

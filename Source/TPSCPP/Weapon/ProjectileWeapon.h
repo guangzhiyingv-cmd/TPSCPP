@@ -17,6 +17,8 @@ class TPSCPP_API AProjectileWeapon : public AWeapon
 
 public:
 	virtual void Fire(bool bPlay, const FVector& HitTarget) override;
+
+	virtual void PrewarmFireAssets() override;
 	
 private:
 	UPROPERTY(EditAnywhere)

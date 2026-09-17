@@ -34,7 +34,14 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	void SetDamage(float NewDamage);
+
+	/** Marks this projectile as a prewarm dummy so it skips damage and impact effects. */
+	void SetPrewarmDummy(bool bInPrewarmDummy) { bPrewarmDummy = bInPrewarmDummy; }
+
 private:
+	/** True when this actor only exists to prewarm classes, components and render resources. */
+	bool bPrewarmDummy = false;
+
 	UPROPERTY(EditAnywhere)
 	class UBoxComponent* CollisionBox;
 

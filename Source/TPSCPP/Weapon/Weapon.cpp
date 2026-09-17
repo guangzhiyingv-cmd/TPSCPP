@@ -6,6 +6,7 @@
 #include "TPSCPPCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "TimerManager.h"
 #include "Weapon/Casing.h"
 
 AWeapon::AWeapon()
@@ -51,6 +52,32 @@ void AWeapon::BeginPlay()
 
 		AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AWeapon::OnSphereOverlap);
 		AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AWeapon::OnSphereEndOverlap);
+	}
+
+	// Deferred to the next tick so prewarming does not slow down level loading.
+	if (bPrewarmFireAssets)
+	{
+		GetWorldTimerManager().SetTimerForNextTick(this, &AWeapon::PrewarmFireAssets);
+	}
+}
+
+void AWeapon::PrewarmFireAssets()
+{
+	UWorld* World = GetWorld();
+	if (!World || !CasingClass)
+	{
+		return;
+	}
+
+	const FVector PrewarmLocation = GetPrewarmLocation();
+	for (int32 Index = 0; Index < PrewarmSpawnCount; ++Index)
+	{
+		// Spawning and destroying forces class load, component registration and physics creation
+		// to happen now instead of on the first real shot.
+		if (ACasing* PrewarmCasing = World->SpawnActor<ACasing>(CasingClass, PrewarmLocation, FRotator::ZeroRotator))
+		{
+			PrewarmCasing->Destroy();
+		}
 	}
 }
 
@@ -190,6 +217,7 @@ void AWeapon::SetWeaponState(EWeaponState State)
 		WeaponMesh->SetSimulatePhysics(false);
 		WeaponMesh->SetEnableGravity(false);
 		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		TimeLastEquipped = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 		break;
 	case EWeaponState::EWS_Dropped:
 		if (HasAuthority())
@@ -203,6 +231,33 @@ void AWeapon::SetWeaponState(EWeaponState State)
 	default:
 		break;
 	}
+}
+
+void AWeapon::UpdateFiringTime()
+{
+	if (const UWorld* World = GetWorld())
+	{
+		TimeLastFired = World->GetTimeSeconds();
+	}
+}
+
+float AWeapon::GetTimeSinceLastInteractedWith() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.f;
+	}
+
+	const double WorldTime = World->GetTimeSeconds();
+	double Result = WorldTime - TimeLastEquipped;
+
+	if (TimeLastFired > 0.0)
+	{
+		Result = FMath::Min(Result, WorldTime - TimeLastFired);
+	}
+
+	return static_cast<float>(Result);
 }
 
 void AWeapon::Dropped()

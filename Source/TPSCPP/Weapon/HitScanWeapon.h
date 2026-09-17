@@ -19,6 +19,8 @@ public:
 	
 	
 	virtual  void Fire(bool bPlay, const FVector& HitTarget) override;
+
+	virtual void PrewarmFireAssets() override;
 	
 	/** Particle system spawned at the impact point when the projectile hits. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")

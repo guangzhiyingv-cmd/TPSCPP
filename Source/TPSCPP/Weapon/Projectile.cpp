@@ -55,7 +55,7 @@ void AProjectile::OnHit(
 	FVector NormalImpulse,
 	const FHitResult& Hit)
 {
-	if (!HasAuthority()) return;
+	if (bPrewarmDummy || !HasAuthority()) return;
 
 	if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(OtherActor))
 	{
@@ -68,6 +68,11 @@ void AProjectile::OnHit(
 void AProjectile::Destroyed()
 {
 	Super::Destroyed();
+
+	if (bPrewarmDummy)
+	{
+		return;
+	}
 
 	if (HitParticles)
 	{

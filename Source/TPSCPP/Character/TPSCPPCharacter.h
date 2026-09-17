@@ -14,7 +14,9 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
+class UAnimInstance;
 class UMaterialInstanceDynamic;
+class FBoolProperty;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -51,10 +53,6 @@ class ATPSCPPCharacter : public ACharacter
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UCombatComponent* Combat;
-
-	/** Child skeletal mesh for weapon attachment. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	USkeletalMeshComponent* CustomMesh;
 
 	/** Local-only weapon view model shown on the first-person camera during ADS. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
@@ -124,6 +122,39 @@ protected:
 	/** Initialize component references after all subobjects are created */
 	virtual void PostInitializeComponents() override;
 
+	/** Component tag used to find the Blueprint-owned custom mesh. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Custom Mesh")
+	FName CustomMeshComponentTag = TEXT("CustomMesh");
+
+	/** Runtime reference to the Blueprint-owned custom mesh. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Custom Mesh")
+	USkeletalMeshComponent* CustomMesh = nullptr;
+
+	/** Animation layer linked on the main mesh when no weapon is equipped. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
+	TSubclassOf<UAnimInstance> DefaultAnimLayer;
+
+	/** Animation layer currently linked on the main mesh. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation")
+	TSubclassOf<UAnimInstance> CurrentAnimLayer;
+
+	/** Seconds after a shot during which the character is treated as firing. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation", meta = (ClampMin = 0.f))
+	float FiringStateDuration = 0.25f;
+
+	/** World time of the most recent shot. */
+	float LastFireTime = -1000.f;
+
+	/** Anim instance class the cached state properties were resolved for. */
+	UPROPERTY(Transient)
+	UClass* CachedAnimStateClass = nullptr;
+
+	/** Cached gameplay-tag style bool properties on the anim instance, resolved by name. */
+	TMap<FName, FBoolProperty*> CachedAnimStateProperties;
+
+	/** Mirrors character state into the anim instance's gameplay-tag style bool properties. */
+	void PushAnimStateToAnimInstance();
+
 protected:
 
 	/** Server RPC: equip the overlapping weapon. */
@@ -175,8 +206,41 @@ public:
 	/** Returns the Combat component. */
 	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
 
-	/** Returns the custom child mesh used for weapon attachment. */
-	FORCEINLINE class USkeletalMeshComponent* GetCustomMesh() const { return CustomMesh; }
+	/** Assigns the Blueprint-owned custom mesh used for weapon attachment. */
+	UFUNCTION(BlueprintCallable, Category = "Custom Mesh")
+	void SetCustomMesh(USkeletalMeshComponent* InCustomMesh);
+
+	/** Resolves the Blueprint-owned custom mesh by component tag. */
+	UFUNCTION(BlueprintCallable, Category = "Custom Mesh")
+	bool ResolveCustomMesh();
+
+	/** Returns the Blueprint-owned custom mesh used for weapon attachment. */
+	UFUNCTION(BlueprintPure, Category = "Custom Mesh")
+	USkeletalMeshComponent* GetCustomMesh() const { return CustomMesh; }
+
+	/** Links the given animation layer on the main mesh, unlinking the previous one. Pass nullptr to only unlink. */
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	void LinkAnimLayer(TSubclassOf<UAnimInstance> AnimLayerClass);
+
+	/** Unlinks the current animation layer and restores the default (unarmed) layer. */
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	void UnlinkAnimLayer();
+
+	/** Marks the character as firing so the anim layer can raise the weapon. */
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	void NotifyWeaponFired();
+
+	/** Returns true while the character is considered to be firing. */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	bool IsFiring() const;
+
+	/** Returns the animation layer linked when no weapon is equipped. */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	TSubclassOf<UAnimInstance> GetDefaultAnimLayer() const { return DefaultAnimLayer; }
+
+	/** Returns the animation layer currently linked on the main mesh. */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	TSubclassOf<UAnimInstance> GetCurrentAnimLayer() const { return CurrentAnimLayer; }
 
 	/** Returns true if the character currently has a weapon equipped. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
@@ -255,10 +319,6 @@ public:
 	/** Applies the equipped weapon's camera recoil for the current shot. */
 	void ApplyWeaponRecoil(bool bUseContinuousRecoil, float ContinuousFireTime);
 
-	/** Plays or stops the fire montage on the character mesh. */
-	UFUNCTION(BlueprintCallable, Category="Animation")
-	void PlayFireMontage(bool bPlay);
-
 	/** Plays or stops the reload montage on the character mesh. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	void PlayReloadMontage(bool bPlay,float ReloadTime=2.0f);
@@ -268,6 +328,12 @@ public:
 	void MulticastPlayHitReaction(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
 	UFUNCTION()
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);
+
+	/** Captures the hit zone damage multiplier. Point damage is broadcast before generic damage. */
+	UFUNCTION()
+	void CacheHitZoneDamageMultiplier(AActor* DamagedActor, float Damage, class AController* InstigatedBy, FVector HitLocation,
+		class UPrimitiveComponent* FHitComponent, FName BoneName, FVector ShotFromDirection,
+		const UDamageType* DamageType, AActor* DamageCauser);
 protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float WalkSpeed = 500.f;
@@ -366,10 +432,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
 	float ADSSensitivity = 0.5f;
 
-	/** Montage played when firing. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
-	UAnimMontage* FireMontage;
-
 	/** Montage played while reloading the equipped weapon. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* ReloadMontage;
@@ -394,6 +456,23 @@ protected:
 	bool bPendingADS = false;
 
 private:
+
+	/** Resolves the damage multiplier for the hit bone from DamageZoneTable. */
+	float ResolveZoneDamageMultiplier(FName BoneName) const;
+
+	/** Maps hit bone names to damage multipliers. Bones without a row use DefaultDamageMultiplier. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage", meta = (AllowPrivateAccess = "true"))
+	class UDataTable* DamageZoneTable;
+
+	/** Multiplier used when the hit bone has no row in DamageZoneTable. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage", meta = (ClampMin = 0.f, AllowPrivateAccess = "true"))
+	float DefaultDamageMultiplier = 1.f;
+
+	/** Damage multiplier captured by the point damage handler for the damage event in flight. */
+	float PendingZoneDamageMultiplier = 1.f;
+
+	/** True while PendingZoneDamageMultiplier belongs to the damage event being processed. */
+	bool bHasPendingZoneDamageMultiplier = false;
 
 	/** Maximum health this character can have. */
 	UPROPERTY(EditAnywhere, Category = "PlayerStats", meta = (ClampMin = 1, AllowPrivateAccess = "true"))

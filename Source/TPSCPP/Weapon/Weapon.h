@@ -9,6 +9,8 @@
 #include "Components/WidgetComponent.h"
 #include "Weapon.generated.h"
 
+class UAnimInstance;
+
 UENUM(BlueprintType)
 enum class EWeaponState : uint8
 {
@@ -42,6 +44,22 @@ public:
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
+
+	/** When enabled, fire assets and actors are prewarmed shortly after BeginPlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prewarm")
+	bool bPrewarmFireAssets = true;
+
+	/** Number of dummy actors spawned during prewarm to initialize classes, components and physics. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prewarm", meta = (ClampMin = 0))
+	int32 PrewarmSpawnCount = 1;
+
+	/** Distance below the weapon used for prewarm spawns so they are never visible. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prewarm")
+	float PrewarmSpawnDepth = 10000.f;
+
+	/** Location used for prewarm spawns. */
+	FVector GetPrewarmLocation() const { return GetActorLocation() - FVector(0.f, 0.f, PrewarmSpawnDepth); }
+
 	/** Called when a pawn overlaps the area sphere on the server. */
 	UFUNCTION()
 	virtual void OnSphereOverlap(
@@ -70,6 +88,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	virtual void Fire(bool bPlay, const FVector& HitTarget);
 
+	/** Prewarms the assets and actors used when this weapon fires so the first shot does not hitch. */
+	UFUNCTION(BlueprintCallable, Category = "Prewarm")
+	virtual void PrewarmFireAssets();
+
 public:
 	UFUNCTION()
 	void OnRep_WeaponState();
@@ -86,6 +108,28 @@ public:
 	/** Montage played when the weapon fires. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	class UAnimationAsset* FireAnim;
+
+	/** Animation layer linked on the character's main mesh while this weapon is equipped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	TSubclassOf<UAnimInstance> AnimLayer;
+
+	/** Returns the animation layer class linked while this weapon is equipped. */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	TSubclassOf<UAnimInstance> GetAnimLayer() const { return AnimLayer; }
+
+	/** Records the current world time as the last time this weapon fired. */
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	void UpdateFiringTime();
+
+	/** Returns how long it has been since this weapon was equipped or last fired. */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	float GetTimeSinceLastInteractedWith() const;
+
+	/** World time this weapon was last equipped. */
+	double TimeLastEquipped = 0.0;
+
+	/** World time this weapon last fired. */
+	double TimeLastFired = 0.0;
 
 	/** Casing actor class ejected when the weapon fires. */
 	UPROPERTY(EditAnywhere, Category = "Weapon")

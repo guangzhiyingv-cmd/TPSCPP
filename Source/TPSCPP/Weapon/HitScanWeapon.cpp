@@ -56,7 +56,7 @@ void AHitScanWeapon::Fire(bool bPlay, const FVector& HitTarget)
 			}
 			if (ClosestHit)
 			{
-				UGameplayStatics::ApplyDamage(ClosestHit->GetActor(), Damage, InstigatorController, this, UDamageType::StaticClass());
+				UGameplayStatics::ApplyPointDamage(ClosestHit->GetActor(), Damage, ClosestHit->ImpactPoint, *ClosestHit, InstigatorController, this, UDamageType::StaticClass());
 
 				if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(ClosestHit->GetActor()))
 				{
@@ -65,6 +65,25 @@ void AHitScanWeapon::Fire(bool bPlay, const FVector& HitTarget)
 
 				MulticastSpawnImpact(ClosestHit->ImpactPoint, ClosestHit->ImpactNormal.Rotation());
 			}
+		}
+	}
+}
+
+void AHitScanWeapon::PrewarmFireAssets()
+{
+	Super::PrewarmFireAssets();
+
+	// PrimeSound initializes the audio source without actually playing anything.
+	if (HitSound)
+	{
+		UGameplayStatics::PrimeSound(HitSound);
+	}
+
+	if (HitParticles)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			UGameplayStatics::SpawnEmitterAtLocation(World, HitParticles, GetPrewarmLocation(), FRotator::ZeroRotator);
 		}
 	}
 }
