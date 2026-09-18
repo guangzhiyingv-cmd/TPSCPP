@@ -62,6 +62,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
 			"Name": "UEEditorMCP",
 			"Enabled": true
 		}

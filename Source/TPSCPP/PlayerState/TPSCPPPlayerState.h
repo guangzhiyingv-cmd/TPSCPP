@@ -7,6 +7,7 @@
 #include "PlayerController/TPSCPPPlayerController.h"
 #include "TPSCPPPlayerState.generated.h"
 
+class UTPSCPPAbilitySystemComponent;
 
 UCLASS()
 class TPSCPP_API ATPSCPPPlayerState : public APlayerState
@@ -14,6 +15,16 @@ class TPSCPP_API ATPSCPPPlayerState : public APlayerState
 	GENERATED_BODY()
 	
 public:
+	ATPSCPPPlayerState();
+
+	/** Returns the owner AbilitySystemComponent for the possessed pawn to grab. */
+	UFUNCTION(BlueprintPure, Category = "AbilitySystem")
+	UTPSCPPAbilitySystemComponent* GetAbilitySystemComponent() const { return AbilitySystemComponent; }
+
+	/** Rebinds the ability actor info to a newly possessed pawn. */
+	void InitAbilityActorInfoForPawn(class APawn* Pawn);
+
+	virtual void PostInitializeComponents() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void OnRep_Score() override;
 	void AddToScore(float ScoreAmount);
@@ -59,6 +70,10 @@ public:
 	void SetPostMatchData(float InPostMatchStartTime, float InPostMatchTime);
 
 private:
+	/** Owner AbilitySystemComponent; the possessed pawn becomes its avatar. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTPSCPPAbilitySystemComponent> AbilitySystemComponent;
+
 	UFUNCTION()
 	void OnRep_Defeats();
 

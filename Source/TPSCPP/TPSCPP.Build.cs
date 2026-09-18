@@ -21,7 +21,10 @@ public class TPSCPP : ModuleRules
 			"OnlineSubsystemSteam",
 			"UMG",
 			"Slate",
-			"Niagara"
+			"Niagara",
+			"GameplayAbilities",
+			"GameplayTags",
+			"GameplayTasks"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

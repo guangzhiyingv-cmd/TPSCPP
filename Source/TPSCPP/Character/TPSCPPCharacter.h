@@ -8,6 +8,7 @@
 #include "Components/CombatComponent.h"
 #include "Components/TimelineComponent.h"
 #include "Curves/CurveFloat.h"
+#include "AbilitySystemInterface.h"
 #include "TPSCPPCharacter.generated.h"
 
 class USpringArmComponent;
@@ -35,7 +36,7 @@ enum class EAimState : uint8
  *  Implements a controllable orbiting camera
  */
 UCLASS(abstract)
-class ATPSCPPCharacter : public ACharacter
+class ATPSCPPCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -105,6 +106,10 @@ public:
 	/** Constructor */
 	ATPSCPPCharacter();	
 
+	//~ Begin IAbilitySystemInterface
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	//~ End IAbilitySystemInterface
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -121,6 +126,9 @@ protected:
 
 	/** Initialize component references after all subobjects are created */
 	virtual void PostInitializeComponents() override;
+
+	/** Bind this pawn as the avatar of the PlayerState-owned ability system. */
+	virtual void PossessedBy(AController* NewController) override;
 
 	/** Component tag used to find the Blueprint-owned custom mesh. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Custom Mesh")

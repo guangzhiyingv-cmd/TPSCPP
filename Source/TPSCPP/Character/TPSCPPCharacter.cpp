@@ -24,6 +24,7 @@
 #include "Sound/SoundBase.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "PlayerState/TPSCPPPlayerState.h"
+#include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -118,6 +119,23 @@ void ATPSCPPCharacter::Restart()
 {
 	Super::Restart();
 	UpdateHUDHealth();
+}
+
+UAbilitySystemComponent* ATPSCPPCharacter::GetAbilitySystemComponent() const
+{
+	const ATPSCPPPlayerState* PS = Cast<ATPSCPPPlayerState>(GetPlayerState());
+	return PS ? PS->GetAbilitySystemComponent() : nullptr;
+}
+
+void ATPSCPPCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	// Rebind this pawn as the avatar of the PlayerState-owned ability system.
+	if (ATPSCPPPlayerState* PS = Cast<ATPSCPPPlayerState>(GetPlayerState()))
+	{
+		PS->InitAbilityActorInfoForPawn(this);
+	}
 }
 
 void ATPSCPPCharacter::Tick(float DeltaTime)

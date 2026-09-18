@@ -1,7 +1,33 @@
 #include "PlayerState/TPSCPPPlayerState.h"
+#include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
 #include "Character/TPSCPPCharacter.h"
 #include "PlayerController/TPSCPPPlayerController.h"
 #include "Net/UnrealNetwork.h"
+
+ATPSCPPPlayerState::ATPSCPPPlayerState()
+{
+	AbilitySystemComponent = CreateDefaultSubobject<UTPSCPPAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent->SetIsReplicated(true);
+}
+
+void ATPSCPPPlayerState::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+
+	if (AbilitySystemComponent)
+	{
+		// Avatar may be null this early; it is rebound in InitAbilityActorInfoForPawn on possess.
+		AbilitySystemComponent->InitAbilityActorInfo(this, GetPawn());
+	}
+}
+
+void ATPSCPPPlayerState::InitAbilityActorInfoForPawn(APawn* Pawn)
+{
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, Pawn);
+	}
+}
 
 void ATPSCPPPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
