@@ -27,9 +27,6 @@ public:
 	/** Drop the currently equipped weapon so it falls as a physical pickup. */
 	void DropEquippedWeapon();
 
-	/** Starts a reload on the equipped weapon. Authority resolves ammo after ReloadTime. */
-	void StartReload();
-
 	/** Set the weapon the owner is currently overlapping (server authority). */
 	void SetOverlappingWeapon(AWeapon* Weapon);
 
@@ -76,21 +73,6 @@ private:
 	void Fire();
 	void StartFireTimer();
 	void FireTimerFinished();
-
-	void ReloadTimerFinished();
-
-	UFUNCTION(Server, Reliable)
-	void ServerReload();
-
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastReloadFinished();
-
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastReload(bool bPlay,float ReloadTime);
-
-	UPROPERTY(Replicated)
-	bool bReloading = false;
-	FTimerHandle ReloadTimer;
 
 	UFUNCTION(Server,Reliable)
 	void ServerFire(bool bPressed, const FVector_NetQuantize& InHitTarget);

@@ -26,6 +26,9 @@
 #include "PlayerState/TPSCPPPlayerState.h"
 #include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
 #include "AbilitySystem/TPSCPPHealthSet.h"
+#include "AbilitySystem/TPSCPPGameplayTags.h"
+#include "AbilitySystem/Abilities/GA_Reload.h"
+#include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
@@ -96,6 +99,8 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	Combat->SetIsReplicated(true);
 
 	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
+
+	ReloadAbilityClass = UGA_Reload::StaticClass();
 
 	ReserveAmmo = StartingReserveAmmo;
 }
@@ -170,6 +175,13 @@ void ATPSCPPCharacter::InitAbilitySystem()
 	{
 		ASC->SetNumericAttributeBase(UTPSCPPHealthSet::GetMaxHealthAttribute(), MaxHealth);
 		ASC->SetNumericAttributeBase(UTPSCPPHealthSet::GetHealthAttribute(), MaxHealth);
+	}
+
+	// Grant the default abilities once on the server.
+	if (HasAuthority() && !bAbilitiesGranted && ReloadAbilityClass)
+	{
+		ASC->GiveAbility(FGameplayAbilitySpec(ReloadAbilityClass, 1, INDEX_NONE, this));
+		bAbilitiesGranted = true;
 	}
 
 	UpdateHUDHealth();
@@ -509,7 +521,8 @@ bool ATPSCPPCharacter::HasEquippedWeapon() const
 
 bool ATPSCPPCharacter::IsReloading() const
 {
-	return Combat != nullptr && Combat->bReloading;
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	return ASC != nullptr && ASC->HasMatchingGameplayTag(TPSCPPGameplayTags::State_Reloading);
 }
 
 bool ATPSCPPCharacter::IsAiming() const
@@ -739,30 +752,56 @@ void ATPSCPPCharacter::DoFireReleased()
 
 void ATPSCPPCharacter::DoReload()
 {
-	if (Combat && !bEliminated)
+	if (!bEliminated)
 	{
-		Combat->StartReload();
+		TryReload();
 	}
 }
 
-void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
+void ATPSCPPCharacter::TryReload()
 {
-	if (!GetMesh() || !GetMesh()->GetAnimInstance()) return;
+	AWeapon* Weapon = Combat ? Combat->GetEquippedWeapon() : nullptr;
+	if (!Weapon) return;
+	if (Weapon->Ammo >= Weapon->MagCapacity) return;
+	if (!Weapon->bInfiniteAmmo && ReserveAmmo <= 0) return;
+
+	// Leaving ADS is a local camera action, so it must happen on the machine requesting the reload.
+	if (AimState == EAimState::ADS)
+	{
+		DoADSEnd();
+	}
+
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		ASC->TryActivateAbilityByClass(ReloadAbilityClass);
+	}
+}
+
+void ATPSCPPCharacter::CancelReloadAbility()
+{
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		FGameplayTagContainer ReloadTags;
+		ReloadTags.AddTag(TPSCPPGameplayTags::Ability_Weapon_Reload);
+		ASC->CancelAbilities(&ReloadTags);
+	}
+}
+
+void ATPSCPPCharacter::MulticastPlayReloadMontage_Implementation(bool bPlay, float ReloadTime)
+{
+	if (!GetMesh() || !GetMesh()->GetAnimInstance() || !ReloadMontage)
+	{
+		return;
+	}
 
 	if (bPlay)
 	{
-		if (ReloadMontage)
-		{
-			float PlayRate = ReloadMontage->GetSectionLength(0) / ReloadTime;
-			GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage, PlayRate);
-		}
+		const float PlayRate = ReloadMontage->GetSectionLength(0) / FMath::Max(ReloadTime, 0.01f);
+		GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage, PlayRate);
 	}
 	else
 	{
-		if (ReloadMontage)
-		{
-			GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, ReloadMontage);
-		}
+		GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, ReloadMontage);
 	}
 }
 

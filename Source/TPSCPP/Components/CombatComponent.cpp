@@ -119,10 +119,10 @@ void UCombatComponent::DropEquippedWeapon()
 {
 	if (!EquippedWeapon) return;
 
-	if (bReloading)
+	// Dropping cancels an in-progress reload.
+	if (Character)
 	{
-		bReloading = false;
-		GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
+		Character->CancelReloadAbility();
 	}
 
 	EquippedWeapon->Dropped();
@@ -201,9 +201,6 @@ void UCombatComponent::Fire()
 {
 	if (!EquippedWeapon || EquippedWeapon->Ammo <= 0) return;
 
-	// Firing cancels an in-progress reload
-	bReloading = false;
-
 	FHitResult TraceHitResult;
 	TraceUnderCrosshairs(TraceHitResult);
 	if (Character)
@@ -237,7 +234,10 @@ void UCombatComponent::FireTimerFinished()
 	// Automatically start a reload when the magazine is empty
 	if (EquippedWeapon->Ammo <= 0)
 	{
-		StartReload();
+		if (Character)
+		{
+			Character->TryReload();
+		}
 		return;
 	}
 
@@ -254,12 +254,10 @@ void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_Ne
 {
 	if (bPressed)
 	{
-		// Firing cancels an in-progress reload
-		if (bReloading)
+		// Firing interrupts a reload.
+		if (Character)
 		{
-			bReloading = false;
-			GetWorld()->GetTimerManager().ClearTimer(ReloadTimer);
-			MulticastReload(false, 0.f);
+			Character->CancelReloadAbility();
 		}
 
 		if (EquippedWeapon && EquippedWeapon->Ammo > 0)
@@ -351,82 +349,6 @@ void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
   		HitTarget += CrosshairWorldDirection * 15.f;
   	}
 	
-}
-
-void UCombatComponent::StartReload()
-{
-	if (!EquippedWeapon || !Character || bReloading) return;
-	if (EquippedWeapon->Ammo >= EquippedWeapon->MagCapacity) return;
-	if (!EquippedWeapon->bInfiniteAmmo && Character->ReserveAmmo <= 0) return;
-
-	if (Character->GetAimState() == EAimState::ADS)
-	{
-		Character->DoADSEnd();
-	}
-
-	bReloading = true;
-
-	if (Character->HasAuthority())
-	{
-		GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
-		MulticastReload(true, EquippedWeapon->ReloadTime);
-	}
-	else
-	{
-		ServerReload();
-	}
-}
-
-void UCombatComponent::ServerReload_Implementation()
-{
-	if (!EquippedWeapon || !Character || bReloading) return;
-	if (EquippedWeapon->Ammo >= EquippedWeapon->MagCapacity) return;
-	if (!EquippedWeapon->bInfiniteAmmo && Character->ReserveAmmo <= 0) return;
-
-	bReloading = true;
-	GetWorld()->GetTimerManager().SetTimer(ReloadTimer, this, &UCombatComponent::ReloadTimerFinished, EquippedWeapon->ReloadTime);
-	MulticastReload(true, EquippedWeapon->ReloadTime);
-}
-
-void UCombatComponent::MulticastReload_Implementation(bool bPlay, float ReloadTime)
-{
-	if (Character)
-	{
-		Character->PlayReloadMontage(bPlay, ReloadTime);
-	}
-}
-
-void UCombatComponent::ReloadTimerFinished()
-{
-	if (!EquippedWeapon)
-	{
-		bReloading = false;
-		return;
-	}
-
-	if (EquippedWeapon->bInfiniteAmmo)
-	{
-		EquippedWeapon->SetAmmo(EquippedWeapon->MagCapacity);
-	}
-	else
-	{
-		const int32 AmmoNeeded = EquippedWeapon->MagCapacity - EquippedWeapon->Ammo;
-		const int32 AmmoToLoad = FMath::Min(AmmoNeeded, Character->ReserveAmmo);
-		EquippedWeapon->SetAmmo(EquippedWeapon->Ammo + AmmoToLoad);
-		Character->ReserveAmmo -= AmmoToLoad;
-	}
-
-	UpdateAmmoHUD();
-	MulticastReloadFinished();
-}
-
-void UCombatComponent::MulticastReloadFinished_Implementation()
-{
-	bReloading = false;
-	if (Character)
-	{
-		Character->PlayReloadMontage(false);
-	}
 }
 
 

@@ -339,9 +339,20 @@ public:
 	/** Applies the equipped weapon's camera recoil for the current shot. */
 	void ApplyWeaponRecoil(bool bUseContinuousRecoil, float ContinuousFireTime);
 
-	/** Plays or stops the reload montage on the character mesh. */
-	UFUNCTION(BlueprintCallable, Category="Animation")
-	void PlayReloadMontage(bool bPlay,float ReloadTime=2.0f);
+	/** Plays or stops the reload montage on every machine. */
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastPlayReloadMontage(bool bPlay, float ReloadTime);
+
+	/** Activates the reload ability on this character's ability system. */
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void TryReload();
+
+	/** Cancels the reload ability, e.g. when firing or dropping the weapon. */
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void CancelReloadAbility();
+
+	/** Returns the montage used by the reload ability. */
+	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
 
 	/** Plays the hit feedback (blood particles and sound) on all machines. */
 	UFUNCTION(NetMulticast, Unreliable)
@@ -455,6 +466,13 @@ protected:
 	/** Montage played while reloading the equipped weapon. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* ReloadMontage;
+
+	/** Reload ability granted to this character. */
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class UGameplayAbility> ReloadAbilityClass;
+
+	/** True once the default abilities have been granted on the server. */
+	bool bAbilitiesGranted = false;
 
 	/** Niagara system spawned at the hit point when this character is shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
