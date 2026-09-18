@@ -8,6 +8,7 @@
 #include "TPSCPPPlayerState.generated.h"
 
 class UTPSCPPAbilitySystemComponent;
+class UTPSCPPHealthSet;
 
 UCLASS()
 class TPSCPP_API ATPSCPPPlayerState : public APlayerState
@@ -73,6 +74,10 @@ private:
 	/** Owner AbilitySystemComponent; the possessed pawn becomes its avatar. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UTPSCPPAbilitySystemComponent> AbilitySystemComponent;
+
+	/** Health attributes, registered with the ability system on both server and clients. */
+	UPROPERTY()
+	TObjectPtr<UTPSCPPHealthSet> HealthSet;
 
 	UFUNCTION()
 	void OnRep_Defeats();

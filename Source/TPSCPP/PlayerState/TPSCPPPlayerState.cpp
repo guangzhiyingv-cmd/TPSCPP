@@ -1,5 +1,6 @@
 #include "PlayerState/TPSCPPPlayerState.h"
 #include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
+#include "AbilitySystem/TPSCPPHealthSet.h"
 #include "Character/TPSCPPCharacter.h"
 #include "PlayerController/TPSCPPPlayerController.h"
 #include "Net/UnrealNetwork.h"
@@ -8,6 +9,11 @@ ATPSCPPPlayerState::ATPSCPPPlayerState()
 {
 	AbilitySystemComponent = CreateDefaultSubobject<UTPSCPPAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
+	// Player controlled ASC: gameplay effects go to the owner, attributes to everyone.
+	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
+	// Named default subobject so both server and clients create the same set and replicate into it.
+	HealthSet = CreateDefaultSubobject<UTPSCPPHealthSet>(TEXT("HealthSet"));
 }
 
 void ATPSCPPPlayerState::PostInitializeComponents()

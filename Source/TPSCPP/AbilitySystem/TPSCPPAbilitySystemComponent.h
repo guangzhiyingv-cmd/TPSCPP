@@ -8,11 +8,13 @@
 
 /**
  * Project AbilitySystemComponent owned by the PlayerState.
- *
- * Empty in Phase 0; attribute callbacks and tag helpers land here in later phases.
  */
 UCLASS()
 class TPSCPP_API UTPSCPPAbilitySystemComponent : public UAbilitySystemComponent
 {
 	GENERATED_BODY()
+
+public:
+	/** Applies a one-shot damage GameplayEffect to this component's owner. */
+	void ApplyDamage(float Damage, AActor* DamageCauser, AController* InstigatorController);
 };

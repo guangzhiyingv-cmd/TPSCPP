@@ -25,6 +25,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "PlayerState/TPSCPPPlayerState.h"
 #include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
+#include "AbilitySystem/TPSCPPHealthSet.h"
+#include "GameplayEffectTypes.h"
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -103,7 +105,7 @@ void ATPSCPPCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	GameModeRef = GetWorld()->GetAuthGameMode<ATPSCPPGameMode>();
-	UpdateHUDHealth();
+	InitAbilitySystem();
 	if (HasAuthority())
 	{
 		// Point damage is broadcast first and records the hit zone multiplier used below.
@@ -132,10 +134,45 @@ void ATPSCPPCharacter::PossessedBy(AController* NewController)
 	Super::PossessedBy(NewController);
 
 	// Rebind this pawn as the avatar of the PlayerState-owned ability system.
+	InitAbilitySystem();
+}
+
+void ATPSCPPCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	// The PlayerState (and its ability system) has arrived on this machine.
+	InitAbilitySystem();
+}
+
+void ATPSCPPCharacter::InitAbilitySystem()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
+	{
+		return;
+	}
+
 	if (ATPSCPPPlayerState* PS = Cast<ATPSCPPPlayerState>(GetPlayerState()))
 	{
 		PS->InitAbilityActorInfoForPawn(this);
 	}
+
+	if (!bAbilitySystemInitialized)
+	{
+		ASC->GetGameplayAttributeValueChangeDelegate(UTPSCPPHealthSet::GetHealthAttribute())
+			.AddUObject(this, &ATPSCPPCharacter::OnHealthAttributeChanged);
+		bAbilitySystemInitialized = true;
+	}
+
+	// The server owns the initial values; clients receive them through attribute replication.
+	if (HasAuthority() && ASC->GetSet<UTPSCPPHealthSet>())
+	{
+		ASC->SetNumericAttributeBase(UTPSCPPHealthSet::GetMaxHealthAttribute(), MaxHealth);
+		ASC->SetNumericAttributeBase(UTPSCPPHealthSet::GetHealthAttribute(), MaxHealth);
+	}
+
+	UpdateHUDHealth();
 }
 
 void ATPSCPPCharacter::Tick(float DeltaTime)
@@ -984,7 +1021,6 @@ void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
-	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, Health, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, ReserveAmmo, COND_OwnerOnly);
 }
 
@@ -1060,24 +1096,21 @@ void ATPSCPPCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const U
 	bHasPendingZoneDamageMultiplier = false;
 	PendingZoneDamageMultiplier = 1.f;
 
-	Health = FMath::Clamp(Health - Damage * ZoneMultiplier, 0.f, MaxHealth);
-
-	if (HasAuthority())
+	UTPSCPPAbilitySystemComponent* ASC = Cast<UTPSCPPAbilitySystemComponent>(GetAbilitySystemComponent());
+	if (!ASC)
 	{
-		UpdateHUDHealth();
+		return;
 	}
 
-	if (Health == 0.f && GameModeRef)
+	ASC->ApplyDamage(Damage * ZoneMultiplier, DamageCauser, InstigatorController);
+
+	// Instant effects resolve synchronously, so the health attribute already reflects the hit.
+	const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>();
+	if (!bEliminated && HealthSet && HealthSet->GetHealth() <= 0.f && GameModeRef)
 	{
 		PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
-		ATPSCPPPlayerController* AttackerController = Cast<ATPSCPPPlayerController>(InstigatorController);
-		GameModeRef->PlayerEliminated(this, PlayerController, AttackerController);
+		GameModeRef->PlayerEliminated(this, PlayerController, Cast<ATPSCPPPlayerController>(InstigatorController));
 	}
-}
-
-void ATPSCPPCharacter::OnRep_Health()
-{
-	UpdateHUDHealth();
 }
 
 void ATPSCPPCharacter::OnRep_ReserveAmmo()
@@ -1089,13 +1122,46 @@ void ATPSCPPCharacter::OnRep_ReserveAmmo()
 }
 
 
+void ATPSCPPCharacter::OnHealthAttributeChanged(const FOnAttributeChangeData& Data)
+{
+	PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	float CurrentMaxHealth = MaxHealth;
+	if (const UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		if (const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>())
+		{
+			CurrentMaxHealth = HealthSet->GetMaxHealth();
+		}
+	}
+
+	PlayerController->SetHealthHUD(Data.NewValue, CurrentMaxHealth);
+}
+
 void ATPSCPPCharacter::UpdateHUDHealth()
 {
 	PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
-	if (PlayerController)
+	if (!PlayerController)
 	{
-		PlayerController->SetHealthHUD(Health, MaxHealth);
+		return;
 	}
+
+	float CurrentHealth = 0.f;
+	float CurrentMaxHealth = MaxHealth;
+	if (const UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		if (const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>())
+		{
+			CurrentHealth = HealthSet->GetHealth();
+			CurrentMaxHealth = HealthSet->GetMaxHealth();
+		}
+	}
+
+	PlayerController->SetHealthHUD(CurrentHealth, CurrentMaxHealth);
 }
 
 

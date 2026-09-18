@@ -130,6 +130,18 @@ protected:
 	/** Bind this pawn as the avatar of the PlayerState-owned ability system. */
 	virtual void PossessedBy(AController* NewController) override;
 
+	/** Rebinds the ability system once the PlayerState has replicated to this machine. */
+	virtual void OnRep_PlayerState() override;
+
+	/** Binds the ability system (avatar, health delegate, initial attributes) when available. */
+	void InitAbilitySystem();
+
+	/** Pushes the health attribute to the HUD. */
+	void OnHealthAttributeChanged(const struct FOnAttributeChangeData& Data);
+
+	/** True once the health attribute delegate has been bound. */
+	bool bAbilitySystemInitialized = false;
+
 	/** Component tag used to find the Blueprint-owned custom mesh. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Custom Mesh")
 	FName CustomMeshComponentTag = TEXT("CustomMesh");
@@ -482,17 +494,9 @@ private:
 	/** True while PendingZoneDamageMultiplier belongs to the damage event being processed. */
 	bool bHasPendingZoneDamageMultiplier = false;
 
-	/** Maximum health this character can have. */
+	/** Maximum health this character can have. Also initializes the health attribute. */
 	UPROPERTY(EditAnywhere, Category = "PlayerStats", meta = (ClampMin = 1, AllowPrivateAccess = "true"))
 	float MaxHealth = 100.f;
-
-	/** Current health, replicated to all clients when it changes. */
-	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_Health, Category = "PlayerStats")
-	float Health = 100.f;
-
-	/** Called when Health is replicated to this machine. */
-	UFUNCTION()
-	void OnRep_Health();
 
 	/** Called when ReserveAmmo is replicated to this machine. */
 	UFUNCTION()
