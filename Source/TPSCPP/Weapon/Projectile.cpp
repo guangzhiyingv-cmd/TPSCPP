@@ -57,6 +57,10 @@ void AProjectile::OnHit(
 {
 	if (bPrewarmDummy || !HasAuthority()) return;
 
+	// Broadcast the impact cue first, so it reaches every machine even when the projectile is
+	// spawned and destroyed within a single frame and therefore never replicates to clients.
+	MulticastSpawnImpact(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+
 	if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(OtherActor))
 	{
 		HitCharacter->MulticastPlayHitReaction(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
@@ -65,24 +69,22 @@ void AProjectile::OnHit(
 	Destroy();
 }
 
-void AProjectile::Destroyed()
+void AProjectile::MulticastSpawnImpact_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
-	Super::Destroyed();
-
-	if (bPrewarmDummy)
-	{
-		return;
-	}
-
 	if (HitParticles)
 	{
-		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitParticles, GetActorLocation(), GetActorRotation());
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitParticles, ImpactPoint, ImpactRotation);
 	}
 
 	if (HitSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, HitSound, GetActorLocation());
+		UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
 	}
+}
+
+void AProjectile::Destroyed()
+{
+	Super::Destroyed();
 }
 
 void AProjectile::Tick(float DeltaTime)

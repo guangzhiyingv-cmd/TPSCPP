@@ -25,8 +25,17 @@ protected:
 		FVector NormalImpulse,
 		const FHitResult& Hit);
 
-	/** Plays the hit effect and sound at the projectile's final location when it is destroyed. */
+	/** Final cleanup when the projectile is destroyed. */
 	virtual void Destroyed() override;
+
+	/**
+	 * Broadcasts the impact cue (particles + sound) to every machine at the authoritative hit
+	 * location. Kept separate from Destroyed because a projectile fired point-blank is destroyed
+	 * in the same frame it is spawned and therefore never replicates to clients. Reliable so the
+	 * cue is flushed before the actor is destroyed and its net channel closes.
+	 */
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastSpawnImpact(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
 
 	UPROPERTY(EditAnywhere)
 	float Damage = 0.f;
