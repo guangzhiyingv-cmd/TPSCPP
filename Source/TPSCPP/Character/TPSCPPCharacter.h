@@ -347,6 +347,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void TryReload();
 
+	/** Activates the fire ability. Returns whether the shot was accepted (ammo and fire rate). */
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	bool TryFireWeapon();
+
 	/** Cancels the reload ability, e.g. when firing or dropping the weapon. */
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void CancelReloadAbility();
@@ -470,6 +474,10 @@ protected:
 	/** Reload ability granted to this character. */
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class UGameplayAbility> ReloadAbilityClass;
+
+	/** Fire ability granted to this character. */
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class UGameplayAbility> FireAbilityClass;
 
 	/** True once the default abilities have been granted on the server. */
 	bool bAbilitiesGranted = false;

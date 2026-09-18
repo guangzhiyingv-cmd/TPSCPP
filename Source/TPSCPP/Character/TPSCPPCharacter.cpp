@@ -27,6 +27,7 @@
 #include "AbilitySystem/TPSCPPAbilitySystemComponent.h"
 #include "AbilitySystem/TPSCPPHealthSet.h"
 #include "AbilitySystem/TPSCPPGameplayTags.h"
+#include "AbilitySystem/Abilities/GA_FireWeapon.h"
 #include "AbilitySystem/Abilities/GA_Reload.h"
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
@@ -101,6 +102,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	DissolveTimeline = CreateDefaultSubobject<UTimelineComponent>(TEXT("DissolveTimelineComponent"));
 
 	ReloadAbilityClass = UGA_Reload::StaticClass();
+	FireAbilityClass = UGA_FireWeapon::StaticClass();
 
 	ReserveAmmo = StartingReserveAmmo;
 }
@@ -178,9 +180,18 @@ void ATPSCPPCharacter::InitAbilitySystem()
 	}
 
 	// Grant the default abilities once on the server.
-	if (HasAuthority() && !bAbilitiesGranted && ReloadAbilityClass)
+	if (HasAuthority() && !bAbilitiesGranted)
 	{
-		ASC->GiveAbility(FGameplayAbilitySpec(ReloadAbilityClass, 1, INDEX_NONE, this));
+		if (ReloadAbilityClass)
+		{
+			ASC->GiveAbility(FGameplayAbilitySpec(ReloadAbilityClass, 1, INDEX_NONE, this));
+		}
+
+		if (FireAbilityClass)
+		{
+			ASC->GiveAbility(FGameplayAbilitySpec(FireAbilityClass, 1, INDEX_NONE, this));
+		}
+
 		bAbilitiesGranted = true;
 	}
 
@@ -775,6 +786,12 @@ void ATPSCPPCharacter::TryReload()
 	{
 		ASC->TryActivateAbilityByClass(ReloadAbilityClass);
 	}
+}
+
+bool ATPSCPPCharacter::TryFireWeapon()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	return ASC && FireAbilityClass ? ASC->TryActivateAbilityByClass(FireAbilityClass) : false;
 }
 
 void ATPSCPPCharacter::CancelReloadAbility()

@@ -252,21 +252,25 @@ void UCombatComponent::FireTimerFinished()
 
 void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
 {
-	if (bPressed)
+	if (!bPressed)
 	{
-		// Firing interrupts a reload.
-		if (Character)
-		{
-			Character->CancelReloadAbility();
-		}
-
-		if (EquippedWeapon && EquippedWeapon->Ammo > 0)
-		{
-			EquippedWeapon->SetAmmo(EquippedWeapon->Ammo - 1);
-			UpdateAmmoHUD();
-		}
+		// Stop the fire animation on all machines when the button is released.
+		MulticastFire(false, InHitTarget);
+		return;
 	}
-	MulticastFire(bPressed, InHitTarget);
+
+	// Firing interrupts a reload.
+	if (Character)
+	{
+		Character->CancelReloadAbility();
+	}
+
+	// The fire ability owns ammo consumption and the fire rate. Broadcast the shot (animation,
+	// casing, recoil, projectile) only when the server accepted it.
+	if (Character && Character->TryFireWeapon())
+	{
+		MulticastFire(true, InHitTarget);
+	}
 }
 
 void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
