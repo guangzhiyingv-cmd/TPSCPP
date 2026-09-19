@@ -147,6 +147,12 @@ GEComponents.Add(TagsComponent);
   切分支/合并前先关编辑器。
 - `git push` 本机 schannel 吊销检查会失败（`CRYPT_E_NO_REVOCATION_CHECK`），需加
   `-c http.schannelCheckRevoke=false -c http.sslVerify=false`。
+- 全局 `credential.https://github.com.helper` 指向了一个**不存在**的
+  `E:\mod\re9\ai\.tools\bin\gh.exe`（另一项目的残留配置）→ 推送会报
+  `failed to execute prompt script` / `could not read Username for 'https://github.com'`。
+  本机 Windows 凭据管理器里已有 `git:https://github.com`，用 `git-credential-wincred` 覆盖即可：
+  `git -c credential.https://github.com.helper= -c credential.https://github.com.helper=wincred -c http.schannelCheckRevoke=false -c http.sslVerify=false push -u origin <branch>`
+  （彻底修复可编辑 `C:\Users\123\.gitconfig` 里那两行 `credential.https://github.com.helper=`）。
 - 改动 `DefaultGame.ini` 中 `ConfigRestartRequired` 的项（如 cue manager、标签）后必须重启编辑器。
 - 诊断 GAS 问题时，直接读 `Saved/Logs/TPSCPP*.log`（日志时间为 UTC，本地 = UTC+8）。
   `LogAbilitySystem` / `LogGameplayCueManager` 默认不会报告"cue tag 不存在"这类问题。
