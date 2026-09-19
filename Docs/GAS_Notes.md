@@ -172,3 +172,55 @@ Net GameNetDriverPktLoss=50 // 指定 NetDriver（默认就是 GameNetDriver）
 
 验证：`stat net` 看 Ping / 丢包。测预测功能（B-1/B-2）推荐：在客户端窗口设
 `Net PktLag=150`（≈300ms RTT），确认拥有者表现**零延迟**、其他机器表现**只出现一次**。
+
+---
+
+## 6. 预测（阶段 B 记录）
+
+### 6.1 本项目采用"手工乐观预测"，而不是 `LocalPredicted`
+原因：开火请求携带命中点走的是 `ServerFire(bool, HitTarget)`。若把能力改成 `LocalPredicted`，
+客户端的预测激活会**自己再发一条 GAS 激活 RPC**，服务器会因此先激活一次，随后 `ServerFire`
+再触发一次（host 端尤其明显 = 一枪打两发）。要正确做必须把命中点改为**随能力激活传的
+target data**（Lyra 的 `ServerSetReplicatedTargetData` + 等待目标数据模式），改动面很大。
+当前需求（拥有者零延迟 + 服务器权威）用乐观预测就够。
+
+统一模式（B-1 开火 / B-2 换弹 都用它）：
+- 拥有者本地**立即**做"看得见的事"：弹药文本、HUD、枪动画、开火反应、换弹蒙太奇、`IsReloading()`
+- 服务器仍是唯一权威：伤害、弹药真值、冷却、生成子弹、状态标签
+- 预测的**退场依据**有两种，都要接上：
+  1. **服务器复制值到达** → `OnRep_Ammo` 把 `PredictedAmmoCost` 归零；
+     `RegisterGameplayTagEvent(State_Reloading, NewOrRemoved)` 清掉本地预测标志
+  2. **服务器回执**（被拒绝时）→ 见 6.2
+- **不要直接改复制值来做预测**：例如直接 `AWeapon::Ammo--`，服务器拒绝时不会回滚，会**长期差 1 发**。
+  B-1 的做法是维护 `PredictedAmmoCost` 偏移，只影响显示与本地判定（`GetPredictedAmmo()`）。
+- **表现不要双播**：拥有者预测过的表现，服务器多播要**跳过射手机器**
+  （角色上 `!HasAuthority() && IsLocallyControlled()`；`UActorComponent` 没有 `HasAuthority()`，
+  用 `GetOwner()->HasAuthority()`）。但"停止"类事件（停枪动画/停换弹蒙太奇）**不能**跳过拥有者。
+
+### 6.2 服务器拒绝激活**不会**通知客户端
+`UAbilitySystemComponent::ClientActivateAbilityFailed_Implementation` 只标记 prediction key 被拒绝、
+结束本地实例，**不广播 `AbilityFailedCallbacks`**（5.8 实测）。因此：
+- 想让拥有者撤销预测，必须自己发回执（本项目：`GA_Reload` → `Client_StopReloadPresentation()`）
+- 校验必须放在 **`ActivateAbility`** 而不是 `CanActivateAbility`：后者被拒时不会进入我们的代码，
+  回执就发不出去（`ActivateAbility` 里做 `bCanReload` 判定 + 立即 `EndAbility(cancelled)`）
+
+### 6.3 `ActivationOwnedTags` 与 `ActivationBlockedTags`
+- `ActivationOwnedTags` 在激活时以 `AddLooseGameplayTags(..., EGameplayTagReplicationState::CountToOwner)`
+  应用，前提是 `UGameplayAbilitiesDeveloperSettings::ReplicateActivationOwnedTags=True`
+  （`[/Script/GameplayAbilities.GameplayAbilitiesDeveloperSettings]`，`ConfigRestartRequired`）。
+  `CountToOwner` 语义 = **标签复制给所有人、计数只给拥有者** → 远端也能看到该状态标签 ✓
+  （本项目用它替代手工 `SetLooseGameplayTagCount` 管理 `State.Reloading`）。
+- `ActivationBlockedTags` 可表达"同类能力不能叠加"：本项目用它防止急速双击 R 激活两个换弹实例。
+
+### 6.4 hitscan 可预测，投射物不可预测（本次结论：暂不做命中特效预测）
+- **hitscan**：命中点由客户端准星决定，客户端 trace 与服务器 trace 用同一套参数即可预测。
+- **投射物**：落点在服务器模拟（`ProjectileMovementComponent` 服务器权威），客户端拿不到；
+  要预测得在客户端预演弹道（`UGameplayStatics::PredictProjectilePath`，注意 `ProjectileGravityScale`、
+  目标移动会造成误差）或改成客户端子弹。
+- 本项目武器类映射（容易踩坑）：`BP_Pistol` → `AHitScanWeapon`；
+  `BP_Assault_Rifle` / `BP_RocketLauncher` → `AProjectileWeapon`（弹丸初速 15000 cm/s，带重力）。
+  **主用武器是投射物**，所以针对 hitscan 的预测在实战里几乎没有效果。
+- 曾尝试"hitscan 本地 trace 预判命中 + 服务器多播跳过射手机器（`bSkipInstigatorMachine`）"，
+  已**回退**（未实战验证）。命中反馈目前由服务器 cue 下发，射手端晚约 1 个 RTT。
+  若将来要做：hitscan 走共用 trace + 跳过射手机器；投射物需要弹道预演。
+
