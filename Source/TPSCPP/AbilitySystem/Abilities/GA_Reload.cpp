@@ -13,58 +13,38 @@ UGA_Reload::UGA_Reload()
 	FGameplayTagContainer ReloadTags;
 	ReloadTags.AddTag(TPSCPPGameplayTags::Ability_Weapon_Reload);
 	SetAssetTags(ReloadTags);
-}
 
-bool UGA_Reload::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
-{
-	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
-	{
-		return false;
-	}
+	// Owned while the ability runs, so every machine sees the reload state (replicated to all).
+	ActivationOwnedTags.AddTag(TPSCPPGameplayTags::State_Reloading);
 
-	// Resolve from the passed ActorInfo so this check is safe on the class default object (the
-	// client never instantiates a ServerOnly ability, so its pre-activation checks run on the CDO).
-	const ATPSCPPCharacter* Character = ActorInfo ? Cast<ATPSCPPCharacter>(ActorInfo->AvatarActor.Get()) : nullptr;
-	const UCombatComponent* Combat = Character ? Character->GetCombat() : nullptr;
-	const AWeapon* Weapon = Combat ? Combat->GetEquippedWeapon() : nullptr;
-	if (!Character || !Weapon)
-	{
-		return false;
-	}
-
-	if (Weapon->Ammo >= Weapon->MagCapacity)
-	{
-		return false;
-	}
-
-	if (!Weapon->bInfiniteAmmo && Character->ReserveAmmo <= 0)
-	{
-		return false;
-	}
-
-	return true;
+	// Reloading is exclusive with itself: a second request while one is running is refused.
+	ActivationBlockedTags.AddTag(TPSCPPGameplayTags::State_Reloading);
 }
 
 void UGA_Reload::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	ATPSCPPCharacter* Character = GetTPSCPPCharacter();
 	AWeapon* Weapon = GetEquippedWeapon();
-	if (!Character || !Weapon || !CommitAbility(Handle, ActorInfo, ActivationInfo))
+
+	// The magazine checks live here rather than in CanActivateAbility so that a refusal always runs
+	// this code path and can tell the owning client to drop its predicted reload.
+	const bool bCanReload = Character && Weapon
+		&& Weapon->Ammo < Weapon->MagCapacity
+		&& (Weapon->bInfiniteAmmo || Character->ReserveAmmo > 0);
+
+	if (!bCanReload || !CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
+		if (Character && ActorInfo && ActorInfo->IsNetAuthority())
+		{
+			Character->Client_StopReloadPresentation();
+		}
+
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
 
-	// Loose tag so every machine knows the character is reloading (it replicates).
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Reloading, 1);
-	}
-
-	// Reloading cancels aiming down sights. This is done on the requesting machine (see
-	// ATPSCPPCharacter::TryReload) because the ADS camera swap is a local, per-player action.
-
-	// Cosmetic montage on all machines; PlayRate keeps it in sync with ReloadTime.
+	// Cosmetic montage on all machines; PlayRate keeps it in sync with ReloadTime. The owning client
+	// plays its own predicted start, which is why the multicast skips it.
 	Character->MulticastPlayReloadMontage(true, Weapon->ReloadTime);
 
 	UAbilityTask_WaitDelay* Task = UAbilityTask_WaitDelay::WaitDelay(this, FMath::Max(Weapon->ReloadTime, 0.01f));
@@ -114,11 +94,6 @@ void UGA_Reload::FinishReload()
 
 void UGA_Reload::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
-	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Reloading, 0);
-	}
-
 	if (ATPSCPPCharacter* Character = GetTPSCPPCharacter())
 	{
 		Character->MulticastPlayReloadMontage(false, 0.f);

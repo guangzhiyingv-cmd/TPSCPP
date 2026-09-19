@@ -9,6 +9,7 @@
 #include "Components/TimelineComponent.h"
 #include "Curves/CurveFloat.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayTagContainer.h"
 #include "TPSCPPCharacter.generated.h"
 
 class USpringArmComponent;
@@ -269,6 +270,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	bool IsReloading() const;
 
+	/** Plays or stops the reload montage locally. */
+	void PlayReloadMontage(bool bPlay, float ReloadTime);
+
+	/** Client RPC: drop the locally predicted reload because the server refused it. */
+	UFUNCTION(Client, Reliable)
+	void Client_StopReloadPresentation();
+
 	/** Returns true if the character is in either aiming state. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool IsAiming() const;
@@ -518,6 +526,12 @@ protected:
 
 	/** True once the default abilities have been granted on the server. */
 	bool bAbilitiesGranted = false;
+
+	/** Local optimistic reload state; the replicated State.Reloading tag is the authority. */
+	bool bPredictedReloading = false;
+
+	/** Clears the local predicted reload once the server's authoritative state arrives or it is refused. */
+	void OnReloadTagChanged(const FGameplayTag Tag, int32 NewCount);
 
 	/** Niagara system spawned at the hit point when this character is shot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")

@@ -171,6 +171,11 @@ void ATPSCPPCharacter::InitAbilitySystem()
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(UTPSCPPHealthSet::GetHealthAttribute())
 			.AddUObject(this, &ATPSCPPCharacter::OnHealthAttributeChanged);
+
+		// The replicated reload state replaces the local prediction as soon as it arrives.
+		ASC->RegisterGameplayTagEvent(TPSCPPGameplayTags::State_Reloading, EGameplayTagEventType::NewOrRemoved)
+			.AddUObject(this, &ATPSCPPCharacter::OnReloadTagChanged);
+
 		bAbilitySystemInitialized = true;
 	}
 
@@ -539,6 +544,11 @@ bool ATPSCPPCharacter::HasEquippedWeapon() const
 
 bool ATPSCPPCharacter::IsReloading() const
 {
+	if (bPredictedReloading)
+	{
+		return true;
+	}
+
 	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
 	return ASC != nullptr && ASC->HasMatchingGameplayTag(TPSCPPGameplayTags::State_Reloading);
 }
@@ -821,10 +831,25 @@ void ATPSCPPCharacter::TryReload()
 	if (Weapon->Ammo >= Weapon->MagCapacity) return;
 	if (!Weapon->bInfiniteAmmo && ReserveAmmo <= 0) return;
 
+	// Already reloading: either predicted locally or confirmed by the server's replicated state.
+	// A second request must be ignored instead of replaying the montage.
+	if (IsReloading())
+	{
+		return;
+	}
+
 	// Leaving ADS is a local camera action, so it must happen on the machine requesting the reload.
 	if (AimState == EAimState::ADS)
 	{
 		DoADSEnd();
+	}
+
+	// Predict the reload so the owner sees it immediately. The server's replicated reload state (or
+	// the refusal notification) ends the prediction.
+	if (!HasAuthority())
+	{
+		bPredictedReloading = true;
+		PlayReloadMontage(true, Weapon->ReloadTime);
 	}
 
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
@@ -849,7 +874,7 @@ void ATPSCPPCharacter::CancelReloadAbility()
 	}
 }
 
-void ATPSCPPCharacter::MulticastPlayReloadMontage_Implementation(bool bPlay, float ReloadTime)
+void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
 {
 	if (!GetMesh() || !GetMesh()->GetAnimInstance() || !ReloadMontage)
 	{
@@ -865,6 +890,31 @@ void ATPSCPPCharacter::MulticastPlayReloadMontage_Implementation(bool bPlay, flo
 	{
 		GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, ReloadMontage);
 	}
+}
+
+void ATPSCPPCharacter::MulticastPlayReloadMontage_Implementation(bool bPlay, float ReloadTime)
+{
+	// The owning client plays its predicted start itself, but every machine (including it) has to
+	// receive the stop so a reload cancelled by the server ends everywhere at the same time.
+	if (bPlay && !HasAuthority() && IsLocallyControlled())
+	{
+		return;
+	}
+
+	PlayReloadMontage(bPlay, ReloadTime);
+}
+
+void ATPSCPPCharacter::Client_StopReloadPresentation_Implementation()
+{
+	bPredictedReloading = false;
+	PlayReloadMontage(false, 0.f);
+}
+
+void ATPSCPPCharacter::OnReloadTagChanged(const FGameplayTag Tag, int32 NewCount)
+{
+	// The server's authoritative reload state (started, finished or cancelled) is mirrored here, so
+	// the local prediction is no longer needed.
+	bPredictedReloading = false;
 }
 
 
