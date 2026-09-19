@@ -6,6 +6,11 @@
 
 UTPSCPPAnimInstance::UTPSCPPAnimInstance()
 {
+	AddDefaultMappings();
+}
+
+void UTPSCPPAnimInstance::AddDefaultMappings()
+{
 	// The mapped properties are the GameplayTag_* booleans owned by the concrete anim blueprint.
 	GameplayTagPropertyMap.AddMapping(TPSCPPGameplayTags::State_Firing, TEXT("GameplayTag_IsFiring"));
 	GameplayTagPropertyMap.AddMapping(TPSCPPGameplayTags::State_ADS, TEXT("GameplayTag_IsADS"));
@@ -19,6 +24,12 @@ void UTPSCPPAnimInstance::InitializeWithAbilitySystem(UAbilitySystemComponent* A
 	{
 		return;
 	}
+
+	// Rebuild the mappings here instead of trusting the serialized ones: blueprint class default
+	// objects do not keep the property names that were set from C++, so the map would find no
+	// properties and drop every entry (leaving the anim graph stuck on stale values).
+	GameplayTagPropertyMap.ClearMappings();
+	AddDefaultMappings();
 
 	GameplayTagPropertyMap.Initialize(this, ASC);
 }

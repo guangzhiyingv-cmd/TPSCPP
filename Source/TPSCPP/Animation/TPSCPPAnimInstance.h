@@ -25,6 +25,12 @@ struct FTPSCPPGameplayTagPropertyMap : public FGameplayTagBlueprintPropertyMap
 		Mapping.TagToMap = Tag;
 		Mapping.PropertyName = PropertyName;
 	}
+
+	/** Drops every mapping; used to rebuild them before binding (serialized names can come back empty). */
+	void ClearMappings()
+	{
+		PropertyMappings.Reset();
+	}
 };
 
 /**
@@ -43,6 +49,9 @@ public:
 	void InitializeWithAbilitySystem(UAbilitySystemComponent* ASC);
 
 protected:
+	/** Adds the project's tag to property mappings. */
+	void AddDefaultMappings();
+
 	/** Tag to property mappings; the mapped properties live on the concrete anim instance class. */
 	UPROPERTY(EditDefaultsOnly, Category = "GameplayTags")
 	FTPSCPPGameplayTagPropertyMap GameplayTagPropertyMap;
