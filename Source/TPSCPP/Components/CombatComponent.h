@@ -39,6 +39,12 @@ public:
 	/** Updates the ammo text in the player HUD. */
 	void UpdateAmmoHUD();
 
+	/** Called when the equipped weapon's ammo is replicated so the local prediction can resync. */
+	void OnAmmoReplicated();
+
+	/** Ammo the owning client optimistically spent since the last replicated ammo update. */
+	int32 GetPredictedAmmo() const;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -70,6 +76,12 @@ private:
 	bool bCanFire = true;
 	FTimerHandle FireTimer;
 
+	/** Rounds the owning client has optimistically spent since the last replicated ammo update. */
+	int32 PredictedAmmoCost = 0;
+
+	/** True when the owning character runs on the authority. */
+	bool HasAuthority() const { return GetOwner() != nullptr && GetOwner()->HasAuthority(); }
+
 	void Fire();
 	void StartFireTimer();
 	void FireTimerFinished();
@@ -79,6 +91,9 @@ private:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastFire(bool bPressed, const FVector_NetQuantize& InHitTarget);
+
+	/** Plays (or stops) the fire presentation locally: weapon animation, fire reaction and ADS recoil. */
+	void PlayFireCosmetics(bool bPressed, const FVector_NetQuantize& InHitTarget);
 
 	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 

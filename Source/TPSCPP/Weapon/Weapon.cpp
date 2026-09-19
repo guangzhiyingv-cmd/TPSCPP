@@ -278,7 +278,7 @@ void AWeapon::OnRep_Ammo()
 	{
 		if (UCombatComponent* Combat = OwnerCharacter->GetCombat())
 		{
-			Combat->UpdateAmmoHUD();
+			Combat->OnAmmoReplicated();
 		}
 	}
 }

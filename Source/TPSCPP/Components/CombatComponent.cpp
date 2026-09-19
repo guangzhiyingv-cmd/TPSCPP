@@ -192,14 +192,20 @@ void UCombatComponent::FireButtonPressed(bool bPressed)
 	}
 	else
 	{
-		// Stop the fire animation on all machines when the button is released
+		// Stop the predicted fire animation right away on the owning client; the server tells the others.
+		if (!HasAuthority())
+		{
+			PlayFireCosmetics(false, HitTarget);
+		}
+
+		// Stop the fire animation on the other machines when the button is released
 		ServerFire(false, HitTarget);
 	}
 }
 
 void UCombatComponent::Fire()
 {
-	if (!EquippedWeapon || EquippedWeapon->Ammo <= 0) return;
+	if (!EquippedWeapon || GetPredictedAmmo() <= 0) return;
 
 	FHitResult TraceHitResult;
 	TraceUnderCrosshairs(TraceHitResult);
@@ -209,6 +215,16 @@ void UCombatComponent::Fire()
 			EquippedWeapon->bAutomatic && bFireButtonPressed && bUseContinuousRecoil,
 			ContinuousFireTime);
 	}
+
+	// Predict the shot locally so the owner sees it immediately: the ammo text and the weapon
+	// animation. The server stays authoritative and the next replicated ammo update resyncs us.
+	if (!HasAuthority())
+	{
+		++PredictedAmmoCost;
+		UpdateAmmoHUD();
+		PlayFireCosmetics(true, HitTarget);
+	}
+
 	ServerFire(true, HitTarget);
 	StartFireTimer();
 }
@@ -232,7 +248,7 @@ void UCombatComponent::FireTimerFinished()
 	if (!EquippedWeapon) return;
 
 	// Automatically start a reload when the magazine is empty
-	if (EquippedWeapon->Ammo <= 0)
+	if (GetPredictedAmmo() <= 0)
 	{
 		if (Character)
 		{
@@ -275,17 +291,29 @@ void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_Ne
 
 void UCombatComponent::MulticastFire_Implementation(bool bPressed, const FVector_NetQuantize& InHitTarget)
 {
-	if (!EquippedWeapon) return;
-	if (Character)
+	// The owning client has already played its predicted shot locally.
+	if (!HasAuthority() && Character && Character->IsLocallyControlled())
 	{
-		EquippedWeapon->Fire(bPressed, InHitTarget);
-		if (bPressed)
-		{
-			EquippedWeapon->UpdateFiringTime();
-			Character->NotifyWeaponFired();
-			float PlayRate = 1.0f / EquippedWeapon->FireDelay;
-			Character->PlayADSRecoil(PlayRate);
-		}
+		return;
+	}
+
+	PlayFireCosmetics(bPressed, InHitTarget);
+}
+
+void UCombatComponent::PlayFireCosmetics(bool bPressed, const FVector_NetQuantize& InHitTarget)
+{
+	if (!EquippedWeapon || !Character)
+	{
+		return;
+	}
+
+	EquippedWeapon->Fire(bPressed, InHitTarget);
+
+	if (bPressed)
+	{
+		EquippedWeapon->UpdateFiringTime();
+		Character->NotifyWeaponFired();
+		Character->PlayADSRecoil(1.f / FMath::Max(EquippedWeapon->FireDelay, 0.01f));
 	}
 }
 
@@ -464,11 +492,23 @@ void UCombatComponent::UpdateAmmoHUD()
 		HUD = HUD == nullptr ? Cast<APlayerHUD>(Controller->GetHUD()) : HUD;
 		if (HUD && HUD->CharacterOverlay)
 		{
-			const int32 Ammo = EquippedWeapon ? EquippedWeapon->Ammo : 0;
+			const int32 Ammo = GetPredictedAmmo();
 			const int32 Reserve = Character->ReserveAmmo;
 			Controller->SetAmmoHUD(Ammo, Reserve);
 		}
 	}
+}
+
+int32 UCombatComponent::GetPredictedAmmo() const
+{
+	return EquippedWeapon ? FMath::Max(EquippedWeapon->Ammo - PredictedAmmoCost, 0) : 0;
+}
+
+void UCombatComponent::OnAmmoReplicated()
+{
+	// The authoritative value arrived: drop the optimistic prediction and show the real value.
+	PredictedAmmoCost = 0;
+	UpdateAmmoHUD();
 }
 
 

@@ -150,3 +150,25 @@ GEComponents.Add(TagsComponent);
 - 改动 `DefaultGame.ini` 中 `ConfigRestartRequired` 的项（如 cue manager、标签）后必须重启编辑器。
 - 诊断 GAS 问题时，直接读 `Saved/Logs/TPSCPP*.log`（日志时间为 UTC，本地 = UTC+8）。
   `LogAbilitySystem` / `LogGameplayCueManager` 默认不会报告"cue tag 不存在"这类问题。
+
+### 5.1 模拟高延迟 / 丢包（测预测行为必备）
+**图形界面**：PIE 工具栏 **Play → Network Emulation → Custom**
+（`ULevelEditorPlayNetworkEmulationSettings`）：Min/Max Latency、Packet Loss Percentage、
+Emulation Target，可分别设 Outgoing / Incoming traffic。
+
+**控制台**（在某个 PIE 窗口按 `~` 输入，只影响该实例的 NetDriver，可精确区分 server/client）：
+```
+Net PktLag=100              // 发送方向固定延迟(ms)，往返 ≈ 2×
+Net PktLagVariance=25       // 抖动(±ms)，需要 PktLag 打开
+Net PktLoss=2               // 发送方向丢包(%)
+Net PktIncomingLagMin=100   // 接收方向延迟(ms)
+Net PktIncomingLagMax=150
+Net PktIncomingLoss=2       // 接收方向丢包(%)
+Net PktFrameDelay=2         // 延迟 N 个 tick 再发送
+Net GameNetDriverPktLoss=50 // 指定 NetDriver（默认就是 GameNetDriver）
+```
+互斥关系（`FPacketSimulationSettings`）：`PktOrder` 与 `PktDup`/`PktLag` 互斥；`PktLagMin/Max`
+与 `PktLag` 二选一；`PktJitter` 会以**丢包**形式表现出来，不是纯延迟。
+
+验证：`stat net` 看 Ping / 丢包。测预测功能（B-1/B-2）推荐：在客户端窗口设
+`Net PktLag=150`（≈300ms RTT），确认拥有者表现**零延迟**、其他机器表现**只出现一次**。
