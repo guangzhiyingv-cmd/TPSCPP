@@ -31,7 +31,11 @@ public:
 	class USoundBase* HitSound;
 
 private:
-	/** Spawns the generic hit effect on all machines after an authoritative hit. */
+	/**
+	 * Executes the impact gameplay cue on all machines after an authoritative hit. Gameplay cues are
+	 * not replicated on their own, so the cue is executed locally on every machine and the hit data
+	 * travels in the RPC parameters.
+	 */
 	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastSpawnImpact(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+	void MulticastExecuteImpactCue(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
 };

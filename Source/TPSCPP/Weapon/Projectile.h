@@ -29,13 +29,14 @@ protected:
 	virtual void Destroyed() override;
 
 	/**
-	 * Broadcasts the impact cue (particles + sound) to every machine at the authoritative hit
-	 * location. Kept separate from Destroyed because a projectile fired point-blank is destroyed
-	 * in the same frame it is spawned and therefore never replicates to clients. Reliable so the
-	 * cue is flushed before the actor is destroyed and its net channel closes.
+	 * Broadcasts the impact gameplay cue to every machine at the authoritative hit location. The
+	 * cue is executed locally on each machine (gameplay cues do not replicate on their own) and the
+	 * projectile's own assets travel in the parameters, because a projectile fired point-blank is
+	 * destroyed in the same frame it is spawned. Reliable so the RPC is flushed before the actor is
+	 * destroyed and its net channel closes.
 	 */
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastSpawnImpact(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+	void MulticastExecuteImpactCue(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
 
 	UPROPERTY(EditAnywhere)
 	float Damage = 0.f;

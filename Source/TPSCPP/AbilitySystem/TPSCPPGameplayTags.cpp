@@ -10,4 +10,6 @@ namespace TPSCPPGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Weapon_Reload, "Ability.Weapon.Reload");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Weapon_Fire, "Ability.Weapon.Fire");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Weapon_Fire, "Cooldown.Weapon.Fire");
+	UE_DEFINE_GAMEPLAY_TAG(Cue_Weapon_Impact, "Cue.Weapon.Impact");
+	UE_DEFINE_GAMEPLAY_TAG(Cue_Hit_Blood, "Cue.Hit.Blood");
 }

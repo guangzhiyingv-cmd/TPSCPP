@@ -3,6 +3,9 @@
 #include "TPSCPP.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "TPSCPPCharacter.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystem/TPSCPPGameplayTags.h"
+#include "GameplayEffectTypes.h"
 #include "Kismet/GameplayStatics.h"
 
 AHitScanWeapon::AHitScanWeapon()
@@ -60,10 +63,10 @@ void AHitScanWeapon::Fire(bool bPlay, const FVector& HitTarget)
 
 				if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(ClosestHit->GetActor()))
 				{
-					HitCharacter->MulticastPlayHitReaction(ClosestHit->ImpactPoint, ClosestHit->ImpactNormal.Rotation());
+					HitCharacter->MulticastExecuteBloodCue(ClosestHit->ImpactPoint, ClosestHit->ImpactNormal.Rotation());
 				}
 
-				MulticastSpawnImpact(ClosestHit->ImpactPoint, ClosestHit->ImpactNormal.Rotation());
+				MulticastExecuteImpactCue(ClosestHit->ImpactPoint, ClosestHit->ImpactNormal.Rotation());
 			}
 		}
 	}
@@ -88,15 +91,21 @@ void AHitScanWeapon::PrewarmFireAssets()
 	}
 }
 
-void AHitScanWeapon::MulticastSpawnImpact_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
+void AHitScanWeapon::MulticastExecuteImpactCue_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
-	if (HitParticles)
-	{
-		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitParticles, ImpactPoint, ImpactRotation);
-	}
+	FGameplayCueParameters Params;
+	Params.Location = ImpactPoint;
+	Params.Normal = ImpactRotation.Vector();
+	// See AProjectile::MulticastExecuteImpactCue: the cue resolves its FX from the class defaults so
+	// that it does not depend on the reporting actor still being alive.
+	Params.SourceObject = GetClass()->GetDefaultObject();
 
-	if (HitSound)
+	// The shooter owns the cosmetic cue for its own shots.
+	if (const ATPSCPPCharacter* OwnerCharacter = Cast<ATPSCPPCharacter>(GetOwner()))
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+		if (UAbilitySystemComponent* ASC = OwnerCharacter->GetAbilitySystemComponent())
+		{
+			ASC->ExecuteGameplayCue(TPSCPPGameplayTags::Cue_Weapon_Impact, Params);
+		}
 	}
 }

@@ -23,4 +23,10 @@ namespace TPSCPPGameplayTags
 
 	/** Granted while the weapon fire ability is on cooldown. */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Weapon_Fire);
+
+	/** Gameplay cue: projectile impact against surfaces. */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Weapon_Impact);
+
+	/** Gameplay cue: blood played on a character that got hit. */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Hit_Blood);
 }

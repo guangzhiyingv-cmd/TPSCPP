@@ -6,6 +6,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "TPSCPPCharacter.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystem/TPSCPPGameplayTags.h"
+#include "GameplayEffectTypes.h"
 #include "TPSCPP.h"
 
 AProjectile::AProjectile()
@@ -59,26 +62,35 @@ void AProjectile::OnHit(
 
 	// Broadcast the impact cue first, so it reaches every machine even when the projectile is
 	// spawned and destroyed within a single frame and therefore never replicates to clients.
-	MulticastSpawnImpact(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+	MulticastExecuteImpactCue(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
 
 	if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(OtherActor))
 	{
-		HitCharacter->MulticastPlayHitReaction(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+		HitCharacter->MulticastExecuteBloodCue(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
 	}
 
 	Destroy();
 }
 
-void AProjectile::MulticastSpawnImpact_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
+void AProjectile::MulticastExecuteImpactCue_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
-	if (HitParticles)
-	{
-		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HitParticles, ImpactPoint, ImpactRotation);
-	}
+	// Carry the impact data in the cue parameters instead of reading it back from this actor: the
+	// actor may already be gone on a remote machine by the time a cue would resolve it.
+	FGameplayCueParameters Params;
+	Params.Location = ImpactPoint;
+	Params.Normal = ImpactRotation.Vector();
+	// The class default object, not the actor: the cue is executed at the end of the frame, by which
+	// point a projectile that hit in the same frame it spawned is already gone on clients. The BP
+	// configured FX live on the class defaults, so the values are identical.
+	Params.SourceObject = GetClass()->GetDefaultObject();
 
-	if (HitSound)
+	// The shooter owns the cosmetic cue for its own shots.
+	if (const ATPSCPPCharacter* InstigatorCharacter = Cast<ATPSCPPCharacter>(GetInstigator()))
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+		if (UAbilitySystemComponent* ASC = InstigatorCharacter->GetAbilitySystemComponent())
+		{
+			ASC->ExecuteGameplayCue(TPSCPPGameplayTags::Cue_Weapon_Impact, Params);
+		}
 	}
 }
 

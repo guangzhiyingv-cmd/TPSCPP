@@ -358,9 +358,20 @@ public:
 	/** Returns the montage used by the reload ability. */
 	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
 
-	/** Plays the hit feedback (blood particles and sound) on all machines. */
+	/** Executes the blood gameplay cue on all machines at the authoritative hit point. */
 	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastPlayHitReaction(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+	void MulticastExecuteBloodCue(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+
+	/** Niagara system played at the hit point when this character is shot. */
+	UFUNCTION(BlueprintPure, Category = "Effects")
+	class UNiagaraSystem* GetBloodNiagaraSystem() const { return BloodNiagaraSystem; }
+
+	/** Sound played at the hit point when this character is shot. */
+	UFUNCTION(BlueprintPure, Category = "Effects")
+	class USoundBase* GetHitSound() const { return HitSound; }
+
+	/** True when the hit sound may play again, throttled per character. */
+	bool ShouldPlayHitSound();
 	UFUNCTION()
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);
 

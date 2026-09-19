@@ -823,29 +823,39 @@ void ATPSCPPCharacter::MulticastPlayReloadMontage_Implementation(bool bPlay, flo
 }
 
 
-void ATPSCPPCharacter::MulticastPlayHitReaction_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
+void ATPSCPPCharacter::MulticastExecuteBloodCue_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
 {
-	if (BloodNiagaraSystem)
+	// Executed locally on every machine: manual cue execution does not replicate, and this keeps the
+	// hit point authoritative (the same value the server traced).
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
 	{
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-			GetWorld(),
-			BloodNiagaraSystem,
-			ImpactPoint,
-			ImpactRotation);
+		return;
 	}
 
-	if (HitSound)
+	FGameplayCueParameters Params;
+	Params.Location = ImpactPoint;
+	Params.Normal = ImpactRotation.Vector();
+
+	ASC->ExecuteGameplayCue(TPSCPPGameplayTags::Cue_Hit_Blood, Params);
+}
+
+bool ATPSCPPCharacter::ShouldPlayHitSound()
+{
+	const UWorld* World = GetWorld();
+	if (!World)
 	{
-		if (UWorld* World = GetWorld())
-		{
-			const float CurrentTime = World->GetTimeSeconds();
-			if (CurrentTime - LastHitSoundTime >= HitSoundCooldown)
-			{
-				LastHitSoundTime = CurrentTime;
-				UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
-			}
-		}
+		return false;
 	}
+
+	const float CurrentTime = World->GetTimeSeconds();
+	if (CurrentTime - LastHitSoundTime < HitSoundCooldown)
+	{
+		return false;
+	}
+
+	LastHitSoundTime = CurrentTime;
+	return true;
 }
 
 void ATPSCPPCharacter::DoADSEnd()
