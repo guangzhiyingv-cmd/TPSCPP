@@ -8,6 +8,26 @@
 Source/
   TPSCPP/                     — 核心模块
     TPSCPP.Build.cs / .cpp / .h
+    AbilitySystem/            — GAS 层（见下）
+      TPSCPPAbilitySystemComponent.cpp / .h
+      TPSCPPHealthSet.cpp / .h
+      TPSCPPDamageEffect.cpp / .h
+      TPSCPPFireCooldownEffect.cpp / .h
+      TPSCPPGameplayTags.cpp / .h
+      TPSCPPGameplayCueManager.cpp / .h
+      TPSCPPNativeGameplayCues.cpp / .h
+      Abilities/
+        TPSCPPGameplayAbility.cpp / .h
+        TPSCPPAbilityCost.cpp / .h
+        TPSCPPAbilityCost_WeaponAmmo.cpp / .h
+        GA_Reload.cpp / .h
+        GA_FireWeapon.cpp / .h
+        GA_Sprint.cpp / .h
+      GameplayCues/
+        TPSCPPCueNotify_Blood.cpp / .h
+        TPSCPPCueNotify_Impact.cpp / .h
+    Animation/
+      TPSCPPAnimInstance.cpp / .h
     Character/
       TPSCPPCharacter.cpp / .h
     Components/
@@ -21,8 +41,11 @@ Source/
       WeaponHeaderWidget.cpp / .h
     PlayerController/
       TPSCPPPlayerController.cpp / .h
+    PlayerState/
+      TPSCPPPlayerState.cpp / .h
     Weapon/
       Casing.cpp / .h
+      HitScanWeapon.cpp / .h
       Projectile.cpp / .h
       ProjectileBullet.cpp / .h
       ProjectileWeapon.cpp / .h
@@ -50,6 +73,7 @@ Content/                      — 蓝图、地图、材质、角色、输入资�
   __ExternalObjects__/        — UE 自动生成
 
 Config/                       — 引擎、游戏、输入、编辑器配置（.ini）
+Docs/                         — 项目文档（GAS_Notes.md：GAS 迁移的坑位与验证过的做法）
 Plugins/
   MultiplayerSessions/        — 多人联机插件（会话管理、菜单 UI、Steam Sockets 封装）
   VisualStudioTools/          — VS 集成工具
@@ -64,8 +88,8 @@ Plugins/
 
 - 角色移动 / 跳跃 / 冲刺，以及 Hipfire / Shoulder / ADS 三种瞄准状态与平滑镜头过渡
 - 武器拾取 / 装备 / 丢弃（`UCombatComponent`），射速、全自动、伤害、ADS 等参数在蓝图可配置
-- 射击：`AProjectileWeapon` 生成 `AProjectileBullet`，命中角色后应用伤害；弹壳物理掉落
-- 生命值：`Health` 复制到所有客户端，`OnRep_Health` 更新 HUD 血量条（`UCharacterOverlay`，支持曲线插值）
+- 射击：`AProjectileWeapon` 生成 `AProjectileBullet`，`AHitScanWeapon` 走瞬时命中；命中角色后应用伤害；弹壳物理掉落
+- 生命值：`Health`/`MaxHealth` 属性在 `UTPSCPPHealthSet`，伤害经 `UTPSCPPDamageEffect`（GE）应用；HUD 由属性变更委托驱动
 - 淘汰：血量归零后 `ATPSCPPGameMode::PlayerEliminated` 触发多播 `Elim()`：关闭碰撞、掉落武器、mesh 布娃娃，5 秒后销毁 Actor
 
 ## 网络与多人游戏
@@ -133,17 +157,51 @@ Plugins/
   - 视觉或行为变更的截图/GIF
   - 变更影响游戏性的验证步骤
 
-## GAS 迁移笔记
+## 游戏框架：Gameplay Ability System（GAS）
 
-项目正在向 Gameplay Ability System（UE 5.8）迁移，实际踩过的坑与已验证做法记录在
-**[`Docs/GAS_Notes.md`](Docs/GAS_Notes.md)**，新增 GAS 相关功能前请先读一遍。要点：
+**本项目以 GAS 作为游戏逻辑框架**（UE 5.8，`GameplayAbilities` / `GameplayTags` / `GameplayTasks` 已启用）。
+新增战斗、状态、表现类功能时，**优先用 Ability / GameplayEffect / GameplayCue / GameplayTag 表达**，
+不要再新写手工状态机、手工计时器或直接 `SpawnEmitter`/`PlaySound` 的表现广播。
 
-- native C++ GameplayCue 类**不会被自动注册**（引擎只扫蓝图资产），必须手动加入 `UGameplayCueSet`，
-  且每次建表（世界初始化）后都要重新注册；否则 cue 会被**静默丢弃**。
+### 已迁移的内容
+
+| 内容 | 承载 |
+|---|---|
+| 换弹 / 开火 / 冲刺 | `UGA_Reload` / `UGA_FireWeapon` / `UGA_Sprint` |
+| 弹药消耗 | `UTPSCPPAbilityCost_WeaponAmmo`（自定义 Cost，经 `CommitAbility`） |
+| 射速限制 | `UTPSCPPFireCooldownEffect`（SetByCaller 时长的冷却 GE） |
+| 生命值 / 伤害 | `UTPSCPPHealthSet` + `UTPSCPPDamageEffect` |
+| 命中 / 落点特效 | `Cue.Hit.Blood` / `Cue.Weapon.Impact`（native GameplayCue 类） |
+| 角色状态（换弹 / 瞄准 / 冲刺 / 开火） | `State.*` GameplayTag，驱动动画与能力门禁 |
+| 动画状态 | `UTPSCPPAnimInstance` + `FGameplayTagBlueprintPropertyMap`（tag → `GameplayTag_Is*` 变量） |
+
+### 架构约定
+
+- **ASC 归属**：`ATPSCPPPlayerState` 持有 ASC（Owner），`ATPSCPPCharacter` 实现 `IAbilitySystemInterface` 并在 `PossessedBy` / `OnRep_PlayerState` 绑定 Avatar。
+- **能力**：继承 `UTPSCPPGameplayAbility`（默认 `ServerOnly` + `InstancedPerActor`）。
+  客户端不做 `LocalPredicted`，而是**手工乐观预测**：本地立即播表现/HUD，服务器仍是唯一权威，
+  由复制值或服务器回执纠正（原因与做法见 `Docs/GAS_Notes.md` §6.1）。
+  能力的激活前检查在客户端跑在 **CDO** 上——解析角色/武器必须用传入的 `ActorInfo`。
+- **状态标签**：跨机器可见的状态标签必须显式选择复制方式：
+  `ActivationOwnedTags`（配合 `ReplicateActivationOwnedTags=True`）或
+  `ASC->SetLooseGameplayTagCount(Tag, Count, EGameplayTagReplicationState::TagOnly)`；
+  **默认参数 `None` 完全不复制**，只会改本机计数。
+- **表现**：统一走 GameplayCue。native C++ cue **不会**被自动注册，必须经
+  `TPSCPPNativeGameplayCues` 加入 cue set（并在每次世界初始化后重注册）。
+- **GE 用 C++ 类**，不新建蓝图 GE 资产；参数用 SetByCaller（`Data.Damage` / `Data.Cooldown`）。
+- **动画**：不要在 Tick 里反射推属性；新增动画状态 = 加一个 tag + 在
+  `UTPSCPPAnimInstance::AddDefaultMappings()` 里加一行映射（属性名对应 ABP 里的 `GameplayTag_Is*`）。
+
+### 详细坑位
+
+实际踩过的坑与验证过的写法记录在 **[`Docs/GAS_Notes.md`](Docs/GAS_Notes.md)**（含 cue 注册、tag 复制、
+预测边界、`ServerOnly` 能力取消、hitscan vs 投射物等），新增 GAS 功能前**先读一遍**。要点：
+
+- native C++ GameplayCue 类**不会被自动注册**，漏注册会**静默丢弃**（日志无提示）。
 - 手动 `ExecuteGameplayCue` **不复制**到客户端；本项目用可靠多播在每台机器本地执行。
-- `ServerOnly` 能力的激活前检查跑在 **CDO** 上：解析角色/武器必须用传入的 `ActorInfo`。
 - 本地表现（相机/ADS）必须由发起端执行，不能在 `ServerOnly` 能力里做。
-- 同帧 spawn+destroy 的对象只能用 **Reliable** 多播，且 cue 参数里不要依赖该 Actor 的弱指针。
+- 同帧 spawn+destroy 的对象只能用 **Reliable** 多播，且 cue 参数里不要依赖该 Actor 的弱指针（用 CDO）。
+- `ServerOnly` 能力**无法被客户端取消**（`CancelAbilities` 跳过非激活 spec），需要 `Server_` RPC 转达。
 
 ## AI 代理专用说明
 
