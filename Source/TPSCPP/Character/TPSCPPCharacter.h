@@ -166,6 +166,9 @@ protected:
 	/** Clears the State.Firing tag once the firing state expires. */
 	void ClearFiringStateTag();
 
+	/** Sets a state tag so every other machine sees it while the owning machine reacts immediately. */
+	void SetStateTag(const FGameplayTag& Tag, bool bActive);
+
 	/** Animation instance the tag driven state is currently bound to (the mesh can recreate it). */
 	TWeakObjectPtr<class UAnimInstance> TagDrivenAnimInstance;
 

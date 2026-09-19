@@ -339,7 +339,7 @@ void ATPSCPPCharacter::NotifyWeaponFired()
 
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
 	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Firing, 1);
+		SetStateTag(TPSCPPGameplayTags::State_Firing, true);
 	}
 
 	GetWorldTimerManager().SetTimer(
@@ -354,10 +354,25 @@ bool ATPSCPPCharacter::IsFiring() const
 
 void ATPSCPPCharacter::ClearFiringStateTag()
 {
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	SetStateTag(TPSCPPGameplayTags::State_Firing, false);
+}
+
+void ATPSCPPCharacter::SetStateTag(const FGameplayTag& Tag, bool bActive)
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
 	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Firing, 0);
+		return;
 	}
+
+	// A loose tag using the default replication state (None) never leaves the machine that set it.
+	// TagOnly publishes it to the other clients (not back to the owner, which keeps its own local
+	// value), so the authority has to publish the state for everyone else to see it.
+	const EGameplayTagReplicationState ReplicationState = HasAuthority()
+		? EGameplayTagReplicationState::TagOnly
+		: EGameplayTagReplicationState::None;
+
+	ASC->SetLooseGameplayTagCount(Tag, bActive ? 1 : 0, ReplicationState);
 }
 
 void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -582,6 +597,7 @@ void ATPSCPPCharacter::DoSprintStart()
 	}
 
 	bIsSprinting = true;
+	SetStateTag(TPSCPPGameplayTags::State_Sprint, true);
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -593,6 +609,7 @@ void ATPSCPPCharacter::DoSprintEnd()
 	if (AimState != EAimState::Hipfire) return;
 
 	bIsSprinting = false;
+	SetStateTag(TPSCPPGameplayTags::State_Sprint, false);
 	StopSprintAbility();
 
 	if (HasEquippedWeapon())
@@ -660,15 +677,9 @@ bool ATPSCPPCharacter::IsSprinting() const
 
 void ATPSCPPCharacter::SyncAimStateTags()
 {
-	// Mirrors the aim state into loose tags so abilities (and other machines) can gate on it.
-	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
-	if (!ASC)
-	{
-		return;
-	}
-
-	ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_ADS, AimState == EAimState::ADS ? 1 : 0);
-	ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_ShoulderAim, AimState == EAimState::Shoulder ? 1 : 0);
+	// Mirrors the aim state into loose tags so abilities and other machines can see it.
+	SetStateTag(TPSCPPGameplayTags::State_ADS, AimState == EAimState::ADS);
+	SetStateTag(TPSCPPGameplayTags::State_ShoulderAim, AimState == EAimState::Shoulder);
 }
  
 	void ATPSCPPCharacter::DoShoulderAimStart()

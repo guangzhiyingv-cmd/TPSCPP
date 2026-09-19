@@ -27,11 +27,13 @@ void UGA_Sprint::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const 
 		return;
 	}
 
-	// Loose tag so every machine knows the character is sprinting (it replicates). The owning
-	// machine keeps its own immediate flag for responsiveness.
+	// Loose tag so every machine knows the character is sprinting. It has to be published explicitly:
+	// a loose tag with the default replication state stays on the machine that set it, so the other
+	// clients would never see this state.
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
 	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Sprint, 1);
+		ASC->SetLooseGameplayTagCount(
+			TPSCPPGameplayTags::State_Sprint, 1, EGameplayTagReplicationState::TagOnly);
 	}
 
 	ApplySprintMovement(true);
@@ -41,7 +43,8 @@ void UGA_Sprint::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGame
 {
 	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
 	{
-		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Sprint, 0);
+		ASC->SetLooseGameplayTagCount(
+			TPSCPPGameplayTags::State_Sprint, 0, EGameplayTagReplicationState::TagOnly);
 	}
 
 	ApplySprintMovement(false);
