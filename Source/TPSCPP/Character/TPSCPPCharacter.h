@@ -181,13 +181,12 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_EquipWeapon();
 
-	/** Server RPC: start sprinting (sets MaxWalkSpeed on authority). */
+	/**
+	 * Server RPC: cancel the sprint ability on the authority. A server only ability is never
+	 * instanced on the owning client, so the client cannot cancel it itself.
+	 */
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_SprintStart();
-
-	/** Server RPC: stop sprinting (restores MaxWalkSpeed on authority). */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_SprintEnd();
+	void Server_StopSprint();
 
 	/** Server RPC: sync the current aim state to the server. */
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -298,6 +297,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoSprintEnd();
 
+	/** Activates the sprint ability. Returns false when sprinting is not allowed right now. */
+	bool TrySprintAbility();
+
+	/** Cancels the sprint ability, e.g. when the input is released, firing or entering an aim state. */
+	void StopSprintAbility();
+
+	/** Returns true while the character is sprinting: the local immediate flag or the replicated tag. */
+	UFUNCTION(BlueprintPure, Category = "Movement")
+	bool IsSprinting() const;
+
+	/** Base movement speed. */
+	FORCEINLINE float GetWalkSpeed() const { return WalkSpeed; }
+
+	/** Sprinting movement speed. */
+	FORCEINLINE float GetSprintSpeed() const { return SprintSpeed; }
+
+	/** Mirrors the current aim state into the replicated State.ADS / State.ShoulderAim tags. */
+	void SyncAimStateTags();
+
 	/** Handles shoulder aim pressed input. */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoShoulderAimStart();
@@ -384,10 +402,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float WalkSpeed = 500.f;
 
+	/** Sprinting movement speed. */
 	UPROPERTY(EditAnywhere, Category="Movement")
 	float SprintSpeed = 1000.f;
 
-	/** Whether the character is currently sprinting. */
+	/**
+	 * Local immediate sprint flag. Sprinting is replicated through the State.Sprint tag that the
+	 * sprint ability sets, so other machines must use IsSprinting() instead of this flag.
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Movement")
 	bool bIsSprinting = false;
 
@@ -489,6 +511,10 @@ protected:
 	/** Fire ability granted to this character. */
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class UGameplayAbility> FireAbilityClass;
+
+	/** Sprint ability granted to this character. */
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class UGameplayAbility> SprintAbilityClass;
 
 	/** True once the default abilities have been granted on the server. */
 	bool bAbilitiesGranted = false;

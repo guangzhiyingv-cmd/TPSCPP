@@ -81,6 +81,26 @@ native cue 若需要"每个蓝图各自配置"的资产（如子弹的 `HitParti
 （`DefaultToInstanced` 的对象会被序列化）。Cost 的 `CheckCost`/`ApplyCost` 同样必须从传入的
 `ActorInfo` 解析角色/武器（见 2.1），扣弹在服务器执行（`CommitAbility`）。
 
+### 2.5 `ServerOnly` 能力无法被客户端取消
+`UAbilitySystemComponent::CancelAbilities()` 会跳过 `!Spec.IsActive()` 的 spec，而 `ServerOnly`
+能力在客户端**从不实例化** → 客户端调 `CancelAbilities` 静默无效，服务器上的能力会一直跑下去
+（表现：客户端本地状态结束了，服务器状态没结束）。
+
+本项目做法：客户端触发"结束"必须走 `Server_` RPC，让服务器去取消它正在运行的能力。
+```cpp
+void ATPSCPPCharacter::StopSprintAbility()
+{
+	if (!HasAuthority()) { Server_StopSprint(); return; }   // 客户端无法自行取消
+	FGameplayTagContainer Tags; Tags.AddTag(TPSCPPGameplayTags::Ability_Sprint);
+	GetAbilitySystemComponent()->CancelAbilities(&Tags);
+}
+```
+取消后由该能力的 `EndAbility` 统一清理状态（tag / 移动参数），**不要在别处重复实现**。
+
+对照：`CancelReloadAbility()` 一直正常，是因为它的调用点（`ServerFire`、`DropEquippedWeapon`）
+本来就在服务器上；若将来从客户端路径调用它，同样会静默失效。
+通用规律：**由服务器执行的能力，其结束也必须由服务器执行**。
+
 ---
 
 ## 3. GameplayEffect

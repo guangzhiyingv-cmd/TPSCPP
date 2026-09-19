@@ -29,6 +29,7 @@
 #include "AbilitySystem/TPSCPPGameplayTags.h"
 #include "AbilitySystem/Abilities/GA_FireWeapon.h"
 #include "AbilitySystem/Abilities/GA_Reload.h"
+#include "AbilitySystem/Abilities/GA_Sprint.h"
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
@@ -103,6 +104,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 
 	ReloadAbilityClass = UGA_Reload::StaticClass();
 	FireAbilityClass = UGA_FireWeapon::StaticClass();
+	SprintAbilityClass = UGA_Sprint::StaticClass();
 
 	ReserveAmmo = StartingReserveAmmo;
 }
@@ -190,6 +192,11 @@ void ATPSCPPCharacter::InitAbilitySystem()
 		if (FireAbilityClass)
 		{
 			ASC->GiveAbility(FGameplayAbilitySpec(FireAbilityClass, 1, INDEX_NONE, this));
+		}
+
+		if (SprintAbilityClass)
+		{
+			ASC->GiveAbility(FGameplayAbilitySpec(SprintAbilityClass, 1, INDEX_NONE, this));
 		}
 
 		bAbilitiesGranted = true;
@@ -374,7 +381,7 @@ void ATPSCPPCharacter::PushAnimStateToAnimInstance()
 	ApplyState(TEXT("GameplayTag_IsFiring"), IsFiring());
 	ApplyState(TEXT("GameplayTag_IsADS"), AimState == EAimState::ADS);
 	ApplyState(TEXT("GameplayTag_IsReloading"), IsReloading());
-	ApplyState(TEXT("GameplayTag_IsDashing"), bIsSprinting);
+	ApplyState(TEXT("GameplayTag_IsDashing"), IsSprinting());
 	ApplyState(TEXT("GameplayTag_IsMelee"), false);
 }
 
@@ -581,6 +588,13 @@ void ATPSCPPCharacter::DoSprintStart()
 {
 	if (AimState != EAimState::Hipfire) return;
 
+	// The ability owns the replicated State.Sprint tag and the authoritative movement, and rejects
+	// the request while aiming or reloading.
+	if (!TrySprintAbility())
+	{
+		return;
+	}
+
 	// Cancel firing if the fire button is held while sprinting
 	if (Combat && Combat->bFireButtonPressed)
 	{
@@ -592,25 +606,6 @@ void ATPSCPPCharacter::DoSprintStart()
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
-
-	if (!HasAuthority()) Server_SprintStart();
-}
-
-void ATPSCPPCharacter::Server_SprintStart_Implementation()
-{
-	if (AimState != EAimState::Hipfire) return;
-
-	bIsSprinting = true;
-	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->bUseControllerDesiredRotation = false;
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-
-	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
-}
-
-bool ATPSCPPCharacter::Server_SprintStart_Validate()
-{
-	return true;
 }
 
 void ATPSCPPCharacter::DoSprintEnd()
@@ -618,39 +613,82 @@ void ATPSCPPCharacter::DoSprintEnd()
 	if (AimState != EAimState::Hipfire) return;
 
 	bIsSprinting = false;
+	StopSprintAbility();
+
 	if (HasEquippedWeapon())
 	{
 		bUseControllerRotationYaw = false;
 		GetCharacterMovement()->bUseControllerDesiredRotation = true;
 		GetCharacterMovement()->bOrientRotationToMovement = false;
 	}
+	else
+	{
+		GetCharacterMovement()->bUseControllerDesiredRotation = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
 
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+}
 
+bool ATPSCPPCharacter::TrySprintAbility()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	return ASC && SprintAbilityClass ? ASC->TryActivateAbilityByClass(SprintAbilityClass) : false;
+}
+
+void ATPSCPPCharacter::StopSprintAbility()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
+	{
+		return;
+	}
+
+	// CancelAbilities skips specs that are not active locally, and a server only ability is never
+	// instanced on the owning client, so ask the server to cancel the ability it is running.
 	if (!HasAuthority())
 	{
-		Server_SprintEnd();
+		Server_StopSprint();
+		return;
 	}
+
+	FGameplayTagContainer SprintTags;
+	SprintTags.AddTag(TPSCPPGameplayTags::Ability_Sprint);
+	ASC->CancelAbilities(&SprintTags);
 }
 
-void ATPSCPPCharacter::Server_SprintEnd_Implementation()
+void ATPSCPPCharacter::Server_StopSprint_Implementation()
 {
-	if (AimState != EAimState::Hipfire) return;
-
-	bIsSprinting = false;
-	if (HasEquippedWeapon())
-	{
-		bUseControllerRotationYaw = false;
-		GetCharacterMovement()->bUseControllerDesiredRotation = true;
-		GetCharacterMovement()->bOrientRotationToMovement = false;
-	}
-
-	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	StopSprintAbility();
 }
 
-bool ATPSCPPCharacter::Server_SprintEnd_Validate()
+bool ATPSCPPCharacter::Server_StopSprint_Validate()
 {
 	return true;
+}
+
+bool ATPSCPPCharacter::IsSprinting() const
+{
+	if (bIsSprinting)
+	{
+		return true;
+	}
+
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	return ASC != nullptr && ASC->HasMatchingGameplayTag(TPSCPPGameplayTags::State_Sprint);
+}
+
+void ATPSCPPCharacter::SyncAimStateTags()
+{
+	// Mirrors the aim state into loose tags so abilities (and other machines) can gate on it.
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC)
+	{
+		return;
+	}
+
+	ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_ADS, AimState == EAimState::ADS ? 1 : 0);
+	ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_ShoulderAim, AimState == EAimState::Shoulder ? 1 : 0);
 }
  
 	void ATPSCPPCharacter::DoShoulderAimStart()
@@ -660,11 +698,14 @@ bool ATPSCPPCharacter::Server_SprintEnd_Validate()
 		return;
 	}
 
+	// Sprinting has the lower priority: cancel it before switching the aim state.
+	DoSprintEnd();
+
 	AimState = EAimState::Shoulder;
+	SyncAimStateTags();
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
-	DoSprintEnd();
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
 	CameraTimeline->SetPlayRate(1.f);
 	CameraTimeline->Play();
@@ -682,6 +723,7 @@ void ATPSCPPCharacter::DoShoulderAimEnd()
 	}
 
 	AimState = EAimState::Hipfire;
+	SyncAimStateTags();
 	if (HasEquippedWeapon())
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
@@ -711,12 +753,15 @@ void ATPSCPPCharacter::DoADSStart()
 		return;
 	}
 
+	// Sprinting has the lower priority: cancel it before switching the aim state.
+	DoSprintEnd();
+
 	AimState = EAimState::ADS;
+	SyncAimStateTags();
 	bPendingADS = true;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
-	DoSprintEnd();
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
 
 	CameraTimeline->SetPlayRate(2.f);
@@ -745,7 +790,7 @@ void ATPSCPPCharacter::DoFirePressed()
 	if (Combat && HasEquippedWeapon() && !bEliminated)
 	{
 		// Cancel sprinting before firing
-		if (bIsSprinting)
+		if (IsSprinting())
 		{
 			DoSprintEnd();
 		}
@@ -866,6 +911,7 @@ void ATPSCPPCharacter::DoADSEnd()
 	}
 
 	AimState = EAimState::Hipfire;
+	SyncAimStateTags();
 	bPendingADS = false;
 	FPS_Camera->SetActive(false);
 	FollowCamera->SetActive(true);
@@ -1101,6 +1147,7 @@ void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 	}
 
 	AimState = NewState;
+	SyncAimStateTags();
 
 	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
 	{
@@ -1265,6 +1312,10 @@ void ATPSCPPCharacter::MulticastElim_Implementation()
 			Combat->FireButtonPressed(false);
 		}
 	}
+
+	// Stop sprinting so the corpse does not keep the replicated sprint state.
+	bIsSprinting = false;
+	StopSprintAbility();
 
 	// Disable capsule and child mesh collision queries so the corpse cannot block or be picked up
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);

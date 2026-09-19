@@ -14,6 +14,9 @@ UGA_FireWeapon::UGA_FireWeapon()
 
 	CooldownGameplayEffectClass = UTPSCPPFireCooldownEffect::StaticClass();
 
+	// Firing takes priority over sprinting.
+	CancelAbilitiesWithTag.AddTag(TPSCPPGameplayTags::Ability_Sprint);
+
 	UTPSCPPAbilityCost_WeaponAmmo* AmmoCost = CreateDefaultSubobject<UTPSCPPAbilityCost_WeaponAmmo>(TEXT("AmmoCost"));
 	AdditionalCosts.Add(AmmoCost);
 }
