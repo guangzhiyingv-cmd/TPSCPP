@@ -133,6 +133,18 @@ Plugins/
   - 视觉或行为变更的截图/GIF
   - 变更影响游戏性的验证步骤
 
+## GAS 迁移笔记
+
+项目正在向 Gameplay Ability System（UE 5.8）迁移，实际踩过的坑与已验证做法记录在
+**[`Docs/GAS_Notes.md`](Docs/GAS_Notes.md)**，新增 GAS 相关功能前请先读一遍。要点：
+
+- native C++ GameplayCue 类**不会被自动注册**（引擎只扫蓝图资产），必须手动加入 `UGameplayCueSet`，
+  且每次建表（世界初始化）后都要重新注册；否则 cue 会被**静默丢弃**。
+- 手动 `ExecuteGameplayCue` **不复制**到客户端；本项目用可靠多播在每台机器本地执行。
+- `ServerOnly` 能力的激活前检查跑在 **CDO** 上：解析角色/武器必须用传入的 `ActorInfo`。
+- 本地表现（相机/ADS）必须由发起端执行，不能在 `ServerOnly` 能力里做。
+- 同帧 spawn+destroy 的对象只能用 **Reliable** 多播，且 cue 参数里不要依赖该 Actor 的弱指针。
+
 ## AI 代理专用说明
 
 当此仓库由 AI 编码代理读取时：
