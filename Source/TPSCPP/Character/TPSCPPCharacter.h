@@ -172,16 +172,6 @@ protected:
 	/** Timer that clears the firing state tag. */
 	FTimerHandle FiringStateTimer;
 
-	/** Anim instance class the cached state properties were resolved for. */
-	UPROPERTY(Transient)
-	UClass* CachedAnimStateClass = nullptr;
-
-	/** Cached gameplay-tag style bool properties on the anim instance, resolved by name. */
-	TMap<FName, FBoolProperty*> CachedAnimStateProperties;
-
-	/** Mirrors character state into the anim instance's gameplay-tag style bool properties. */
-	void PushAnimStateToAnimInstance();
-
 protected:
 
 	/** Server RPC: equip the overlapping weapon. */

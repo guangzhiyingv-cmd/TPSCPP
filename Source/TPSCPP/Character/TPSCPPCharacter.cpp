@@ -217,7 +217,6 @@ void ATPSCPPCharacter::Tick(float DeltaTime)
 
 	PollInit();
 	UpdateRecoilReturn(DeltaTime);
-	PushAnimStateToAnimInstance();
 }
 
 void ATPSCPPCharacter::PostInitializeComponents()
@@ -359,61 +358,6 @@ void ATPSCPPCharacter::ClearFiringStateTag()
 	{
 		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Firing, 0);
 	}
-}
-
-void ATPSCPPCharacter::PushAnimStateToAnimInstance()
-{
-	USkeletalMeshComponent* AnimMesh = GetMesh();
-	UAnimInstance* AnimInstance = AnimMesh ? AnimMesh->GetAnimInstance() : nullptr;
-	if (!AnimInstance)
-	{
-		return;
-	}
-
-	// Fallback for animation blueprints that are not reparented to UTPSCPPAnimInstance yet: once they
-	// are, the gameplay tag property map drives these variables instead of this reflection push.
-	if (Cast<UTPSCPPAnimInstance>(AnimInstance))
-	{
-		return;
-	}
-
-	// The anim blueprint owns these as gameplay-tag bound variables, so resolve them by name once per anim class.
-	if (CachedAnimStateClass != AnimInstance->GetClass())
-	{
-		CachedAnimStateClass = AnimInstance->GetClass();
-		CachedAnimStateProperties.Reset();
-
-		static const FName AnimStatePropertyNames[] =
-		{
-			TEXT("GameplayTag_IsFiring"),
-			TEXT("GameplayTag_IsADS"),
-			TEXT("GameplayTag_IsReloading"),
-			TEXT("GameplayTag_IsDashing"),
-			TEXT("GameplayTag_IsMelee")
-		};
-
-		for (const FName& PropertyName : AnimStatePropertyNames)
-		{
-			if (FBoolProperty* Property = FindFProperty<FBoolProperty>(CachedAnimStateClass, PropertyName))
-			{
-				CachedAnimStateProperties.Add(PropertyName, Property);
-			}
-		}
-	}
-
-	auto ApplyState = [this, AnimInstance](const FName& PropertyName, bool bValue)
-	{
-		if (FBoolProperty* const* Found = CachedAnimStateProperties.Find(PropertyName))
-		{
-			(*Found)->SetPropertyValue_InContainer(AnimInstance, bValue);
-		}
-	};
-
-	ApplyState(TEXT("GameplayTag_IsFiring"), IsFiring());
-	ApplyState(TEXT("GameplayTag_IsADS"), AimState == EAimState::ADS);
-	ApplyState(TEXT("GameplayTag_IsReloading"), IsReloading());
-	ApplyState(TEXT("GameplayTag_IsDashing"), IsSprinting());
-	ApplyState(TEXT("GameplayTag_IsMelee"), false);
 }
 
 void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
