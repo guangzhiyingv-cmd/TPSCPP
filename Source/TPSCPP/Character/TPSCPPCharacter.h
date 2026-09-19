@@ -163,8 +163,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation", meta = (ClampMin = 0.f))
 	float FiringStateDuration = 0.25f;
 
-	/** World time of the most recent shot. */
-	float LastFireTime = -1000.f;
+	/** Clears the State.Firing tag once the firing state expires. */
+	void ClearFiringStateTag();
+
+	/** Animation instance the tag driven state is currently bound to (the mesh can recreate it). */
+	TWeakObjectPtr<class UAnimInstance> TagDrivenAnimInstance;
+
+	/** Timer that clears the firing state tag. */
+	FTimerHandle FiringStateTimer;
 
 	/** Anim instance class the cached state properties were resolved for. */
 	UPROPERTY(Transient)

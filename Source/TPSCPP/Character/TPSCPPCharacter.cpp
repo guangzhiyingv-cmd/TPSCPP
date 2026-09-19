@@ -30,6 +30,7 @@
 #include "AbilitySystem/Abilities/GA_FireWeapon.h"
 #include "AbilitySystem/Abilities/GA_Reload.h"
 #include "AbilitySystem/Abilities/GA_Sprint.h"
+#include "Animation/TPSCPPAnimInstance.h"
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
@@ -330,16 +331,34 @@ void ATPSCPPCharacter::UnlinkAnimLayer()
 
 void ATPSCPPCharacter::NotifyWeaponFired()
 {
-	if (const UWorld* World = GetWorld())
+	// The anim layer reacts to the firing tag. It is driven on the authority and on the owning client
+	// (instant local reaction); other machines receive it through tag replication.
+	if (!HasAuthority() && !IsLocallyControlled())
 	{
-		LastFireTime = World->GetTimeSeconds();
+		return;
 	}
+
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Firing, 1);
+	}
+
+	GetWorldTimerManager().SetTimer(
+		FiringStateTimer, this, &ATPSCPPCharacter::ClearFiringStateTag, FiringStateDuration, false);
 }
 
 bool ATPSCPPCharacter::IsFiring() const
 {
-	const UWorld* World = GetWorld();
-	return World != nullptr && (World->GetTimeSeconds() - LastFireTime) <= FiringStateDuration;
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	return ASC != nullptr && ASC->HasMatchingGameplayTag(TPSCPPGameplayTags::State_Firing);
+}
+
+void ATPSCPPCharacter::ClearFiringStateTag()
+{
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		ASC->SetLooseGameplayTagCount(TPSCPPGameplayTags::State_Firing, 0);
+	}
 }
 
 void ATPSCPPCharacter::PushAnimStateToAnimInstance()
@@ -347,6 +366,13 @@ void ATPSCPPCharacter::PushAnimStateToAnimInstance()
 	USkeletalMeshComponent* AnimMesh = GetMesh();
 	UAnimInstance* AnimInstance = AnimMesh ? AnimMesh->GetAnimInstance() : nullptr;
 	if (!AnimInstance)
+	{
+		return;
+	}
+
+	// Fallback for animation blueprints that are not reparented to UTPSCPPAnimInstance yet: once they
+	// are, the gameplay tag property map drives these variables instead of this reflection push.
+	if (Cast<UTPSCPPAnimInstance>(AnimInstance))
 	{
 		return;
 	}
@@ -1442,6 +1468,21 @@ void ATPSCPPCharacter::PollInit()
 		{
 			PlayerStateRef->AddToScore(0.0f);
 			PlayerStateRef->AddToDefeats(0.0f);
+		}
+	}
+
+	// Bind the tag driven animation state once the anim instance exists (it can be recreated).
+	if (USkeletalMeshComponent* MeshComponent = GetMesh())
+	{
+		UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance();
+		if (AnimInstance && AnimInstance != TagDrivenAnimInstance.Get())
+		{
+			TagDrivenAnimInstance = AnimInstance;
+
+			if (UTPSCPPAnimInstance* TagDrivenAnim = Cast<UTPSCPPAnimInstance>(AnimInstance))
+			{
+				TagDrivenAnim->InitializeWithAbilitySystem(GetAbilitySystemComponent());
+			}
 		}
 	}
 }

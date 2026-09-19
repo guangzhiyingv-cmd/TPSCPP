@@ -33,6 +33,9 @@ namespace TPSCPPGameplayTags
 	/** Loose tag set while the character is shoulder aiming. */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ShoulderAim);
 
+	/** Loose tag set for a short time after the character fired. */
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Firing);
+
 	/** Identity tag of the sprint ability, used for cancellation. */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Sprint);
 
