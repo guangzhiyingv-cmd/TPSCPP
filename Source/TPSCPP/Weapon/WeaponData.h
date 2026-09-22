@@ -8,6 +8,7 @@ class AProjectile;
 class ACasing;
 class UAnimInstance;
 class UAnimationAsset;
+class UAnimMontage;
 class UCurveFloat;
 class UParticleSystem;
 class USkeletalMesh;
@@ -24,6 +25,10 @@ struct TPSCPP_API FWeaponData : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
 	TSoftObjectPtr<UAnimationAsset> FireAnim;
+
+	/** Montage played when the character reloads this weapon. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
+	TSoftObjectPtr<UAnimMontage> ReloadMontage;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
 	TSubclassOf<UAnimInstance> AnimLayer;

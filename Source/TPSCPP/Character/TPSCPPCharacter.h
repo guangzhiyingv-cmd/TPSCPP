@@ -381,8 +381,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void CancelReloadAbility();
 
-	/** Returns the montage used by the reload ability. */
-	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
+	/**
+	 * Returns the reload montage to play: the equipped weapon's, or the character fallback when the
+	 * weapon data row has none. The weapon getter logs a one-time warning in the fallback case.
+	 */
+	UAnimMontage* GetReloadMontage() const;
 
 	/**
 	 * Executes the blood gameplay cue on every machine at the authoritative hit points. A shotgun
@@ -513,7 +516,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
 	float ADSSensitivity = 0.5f;
 
-	/** Montage played while reloading the equipped weapon. */
+	/** Fallback reload montage used when the equipped weapon's data row has none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	UAnimMontage* ReloadMontage;
 
@@ -534,6 +537,9 @@ protected:
 
 	/** Local optimistic reload state; the replicated State.Reloading tag is the authority. */
 	bool bPredictedReloading = false;
+
+	/** Set once when the "no reload montage at all" warning was logged for this character. */
+	mutable bool bWarnedNoReloadMontage = false;
 
 	/** Clears the local predicted reload once the server's authoritative state arrives or it is refused. */
 	void OnReloadTagChanged(const FGameplayTag Tag, int32 NewCount);

@@ -63,6 +63,9 @@ protected:
 	/** Tracks whether this actor has already received its initial data-table runtime state. */
 	bool bWeaponDataInitialized = false;
 
+	/** Set once when the missing reload montage warning was logged for this weapon. */
+	mutable bool bWarnedMissingReloadMontage = false;
+
 	/** When enabled, fire assets and actors are prewarmed shortly after BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prewarm")
 	bool bPrewarmFireAssets = true;
@@ -131,9 +134,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	TSubclassOf<UAnimInstance> AnimLayer;
 
+	/** Montage played while this weapon is reloading. Falls back to the character's when unset. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	class UAnimMontage* ReloadMontage;
+
 	/** Returns the animation layer class linked while this weapon is equipped. */
 	UFUNCTION(BlueprintPure, Category = "Animation")
 	TSubclassOf<UAnimInstance> GetAnimLayer() const { return AnimLayer; }
+
+	/**
+	 * Returns the reload montage of this weapon. Logs a one-time warning when the weapon data row
+	 * has none, so a weapon that silently falls back to the character's montage is noticed.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	class UAnimMontage* GetReloadMontage() const;
 
 	UFUNCTION(BlueprintPure, Category = "Weapon Data")
 	const FWeaponData& GetWeaponData() const { return WeaponData; }

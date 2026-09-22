@@ -34,55 +34,6 @@
 #include "Animation/TPSCPPAnimInstance.h"
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
-#include "HAL/IConsoleManager.h"
-
-// ============================================================
-// Debug-only health replication latency probe. Enable with:
-//   tpscpp.DebugHealthLatency 1
-// Decisive experiment (server overrides the PlayerState net update rate):
-//   tpscpp.DebugHealthLatency.PSNetUpdateHz 30
-//
-// The blood cue multicast arrives over the victim pawn channel while the health attribute
-// arrives over the PlayerState channel, so the gap between the two arrivals is the replication
-// throttling cost, measured with one local monotonic clock (no cross-machine clock sync needed).
-// ============================================================
-#if !UE_BUILD_SHIPPING
-namespace TPSCPPHealthLatencyDebug
-{
-	struct FSample
-	{
-		double RpcArrival = 0.0;
-		bool bValid = false;
-	};
-
-	static TAutoConsoleVariable<int32> CVarEnabled(
-		TEXT("tpscpp.DebugHealthLatency"),
-		0,
-		TEXT("Logs how late the replicated health reaches the owning client after a hit."),
-		ECVF_Default);
-
-	static TAutoConsoleVariable<float> CVarPSNetUpdateHz(
-		TEXT("tpscpp.DebugHealthLatency.PSNetUpdateHz"),
-		0.f,
-		TEXT("Experiment: forces the PlayerState net update frequency on the server (0 = keep default)."),
-		ECVF_Default);
-
-	static bool IsEnabled()
-	{
-		return CVarEnabled.GetValueOnGameThread() > 0;
-	}
-
-	static TMap<UWorld*, FSample>& Pending()
-	{
-		static TMap<UWorld*, FSample> Samples;
-		return Samples;
-	}
-
-	static int32 Count = 0;
-	static double SumWait = 0.0;
-	static double MaxWait = 0.0;
-}
-#endif
 
 ATPSCPPCharacter::ATPSCPPCharacter()
 {
@@ -905,21 +856,59 @@ void ATPSCPPCharacter::CancelReloadAbility()
 	}
 }
 
+UAnimMontage* ATPSCPPCharacter::GetReloadMontage() const
+{
+	if (const UCombatComponent* EquippedCombat = GetCombat())
+	{
+		if (const AWeapon* Weapon = EquippedCombat->GetEquippedWeapon())
+		{
+			// The weapon getter warns once when its data row has no reload montage.
+			if (UAnimMontage* WeaponMontage = Weapon->GetReloadMontage())
+			{
+				return WeaponMontage;
+			}
+		}
+	}
+
+	// Fallback for weapons whose data row has no montage assigned yet.
+	if (!ReloadMontage && !bWarnedNoReloadMontage)
+	{
+		bWarnedNoReloadMontage = true;
+		UE_LOG(LogTemp, Warning,
+			TEXT("'%s' has no reload montage: neither the equipped weapon's data nor the character fallback is set, so reloading plays no animation."),
+			*GetNameSafe(this));
+	}
+
+	return ReloadMontage;
+}
+
 void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
 {
-	if (!GetMesh() || !GetMesh()->GetAnimInstance() || !ReloadMontage)
+	USkeletalMeshComponent* MeshComponent = GetMesh();
+	UAnimInstance* MeshAnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
+	UAnimMontage* MontageToPlay = GetReloadMontage();
+	if (!MeshComponent || !MeshAnimInstance || !MontageToPlay)
 	{
 		return;
 	}
 
 	if (bPlay)
 	{
-		const float PlayRate = ReloadMontage->GetSectionLength(0) / FMath::Max(ReloadTime, 0.01f);
-		GetMesh()->GetAnimInstance()->Montage_Play(ReloadMontage, PlayRate);
+		const float PlayRate = MontageToPlay->GetSectionLength(0) / FMath::Max(ReloadTime, 0.01f);
+		MeshAnimInstance->Montage_Play(MontageToPlay, PlayRate);
 	}
 	else
 	{
-		GetMesh()->GetAnimInstance()->Montage_Stop(0.1f, ReloadMontage);
+		// Switching weapons cancels the reload, so the equipped weapon (and therefore the resolved
+		// montage) may already have changed: stop whatever is running instead of only the resolved one.
+		if (MeshAnimInstance->Montage_IsPlaying(MontageToPlay))
+		{
+			MeshAnimInstance->Montage_Stop(0.1f, MontageToPlay);
+		}
+		else
+		{
+			MeshAnimInstance->Montage_Stop(0.1f);
+		}
 	}
 }
 
@@ -951,18 +940,6 @@ void ATPSCPPCharacter::OnReloadTagChanged(const FGameplayTag Tag, int32 NewCount
 
 void ATPSCPPCharacter::MulticastExecuteBloodCues_Implementation(const TArray<FTPSCPPCueImpact>& Impacts)
 {
-#if !UE_BUILD_SHIPPING
-	// Reference point for the latency probe: this RPC travels over the pawn channel, the health
-	// attribute over the (default 10 Hz) PlayerState channel. Only the victim's own client samples.
-	if (TPSCPPHealthLatencyDebug::IsEnabled() && !HasAuthority() && IsLocallyControlled())
-	{
-		TPSCPPHealthLatencyDebug::FSample Sample;
-		Sample.RpcArrival = FPlatformTime::Seconds();
-		Sample.bValid = true;
-		TPSCPPHealthLatencyDebug::Pending().Add(GetWorld(), Sample);
-	}
-#endif
-
 	// Executed locally on every machine using the replicated character as the cue target. The native
 	// blood cue is static and does not need the character's ability system to be bound on this
 	// machine; waiting for the ASC can silently drop remote hits. The multicast already reached every
@@ -1314,29 +1291,6 @@ void ATPSCPPCharacter::ReceiveDamage(AActor* DamagedActor, float Damage, const U
 
 	// Instant effects resolve synchronously, so the health attribute already reflects the hit.
 	const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>();
-
-#if !UE_BUILD_SHIPPING
-	if (TPSCPPHealthLatencyDebug::IsEnabled())
-	{
-		if (ATPSCPPPlayerState* DebugPS = GetPlayerState<ATPSCPPPlayerState>())
-		{
-			// Optional experiment: raise the PlayerState net update rate and check whether the
-			// measured chWait on the client drops with it.
-			const float ForcedHz = TPSCPPHealthLatencyDebug::CVarPSNetUpdateHz.GetValueOnGameThread();
-			if (ForcedHz > 0.f)
-			{
-				DebugPS->SetNetUpdateFrequency(ForcedHz);
-			}
-
-			UE_LOG(LogTemp, Warning,
-				TEXT("HealthLatency|SERVER dmg=%.1f health=%.1f psHz=%.1f"),
-				Damage * ZoneMultiplier,
-				HealthSet ? HealthSet->GetHealth() : -1.f,
-				DebugPS->GetNetUpdateFrequency());
-		}
-	}
-#endif
-
 	if (!bEliminated && HealthSet && HealthSet->GetHealth() <= 0.f && GameModeRef)
 	{
 		PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
@@ -1355,59 +1309,22 @@ void ATPSCPPCharacter::OnRep_ReserveAmmo()
 
 void ATPSCPPCharacter::OnHealthAttributeChanged(const FOnAttributeChangeData& Data)
 {
-#if !UE_BUILD_SHIPPING
-	TPSCPPHealthLatencyDebug::FSample Sample;
-	const bool bHaveSample = TPSCPPHealthLatencyDebug::IsEnabled() &&
-		TPSCPPHealthLatencyDebug::Pending().RemoveAndCopyValue(GetWorld(), Sample);
-
-	double WaitMs = 0.0;
-	double ArriveTime = 0.0;
-	if (bHaveSample)
-	{
-		ArriveTime = FPlatformTime::Seconds();
-		WaitMs = (ArriveTime - Sample.RpcArrival) * 1000.0;
-		TPSCPPHealthLatencyDebug::SumWait += WaitMs;
-		TPSCPPHealthLatencyDebug::MaxWait = FMath::Max(TPSCPPHealthLatencyDebug::MaxWait, WaitMs);
-		++TPSCPPHealthLatencyDebug::Count;
-	}
-#endif
-
-	// The early return is now a guarded block so the latency line still prints when the HUD is not
-	// reachable (that case is itself a diagnostic).
 	PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
-	if (PlayerController)
+	if (!PlayerController)
 	{
-		float CurrentMaxHealth = MaxHealth;
-		if (const UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+		return;
+	}
+
+	float CurrentMaxHealth = MaxHealth;
+	if (const UAbilitySystemComponent* ASC = GetAbilitySystemComponent())
+	{
+		if (const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>())
 		{
-			if (const UTPSCPPHealthSet* HealthSet = ASC->GetSet<UTPSCPPHealthSet>())
-			{
-				CurrentMaxHealth = HealthSet->GetMaxHealth();
-			}
+			CurrentMaxHealth = HealthSet->GetMaxHealth();
 		}
-
-		PlayerController->SetHealthHUD(Data.NewValue, CurrentMaxHealth);
 	}
 
-#if !UE_BUILD_SHIPPING
-	if (bHaveSample)
-	{
-		const ATPSCPPPlayerState* DebugPS = GetPlayerState<ATPSCPPPlayerState>();
-		UE_LOG(LogTemp, Warning,
-			TEXT("HealthLatency|CLIENT chWait=%.1fms hud=%.2fms old=%.1f new=%.1f hudUpdated=%d ping=%.0fms psHz=%.1f pawnHz=%.1f n=%d avg=%.1f max=%.1f"),
-			WaitMs,
-			(FPlatformTime::Seconds() - ArriveTime) * 1000.0,
-			Data.OldValue,
-			Data.NewValue,
-			PlayerController ? 1 : 0,
-			DebugPS ? DebugPS->GetPingInMilliseconds() : -1.f,
-			DebugPS ? DebugPS->GetNetUpdateFrequency() : -1.f,
-			GetNetUpdateFrequency(),
-			TPSCPPHealthLatencyDebug::Count,
-			TPSCPPHealthLatencyDebug::SumWait / TPSCPPHealthLatencyDebug::Count,
-			TPSCPPHealthLatencyDebug::MaxWait);
-	}
-#endif
+	PlayerController->SetHealthHUD(Data.NewValue, CurrentMaxHealth);
 }
 
 void ATPSCPPCharacter::UpdateHUDHealth()

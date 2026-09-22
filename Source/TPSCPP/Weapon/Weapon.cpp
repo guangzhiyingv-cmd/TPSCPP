@@ -7,6 +7,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Animation/AnimationAsset.h"
+#include "Animation/AnimMontage.h"
 #include "Curves/CurveFloat.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Texture2D.h"
@@ -106,6 +107,10 @@ void AWeapon::ApplyWeaponData(bool bInitializeRuntimeState)
 	FireAnim = WeaponData.FireAnim.IsNull()
 		? FireAnim
 		: LoadSoftObject(WeaponData.FireAnim);
+
+	ReloadMontage = WeaponData.ReloadMontage.IsNull()
+		? ReloadMontage
+		: LoadSoftObject(WeaponData.ReloadMontage);
 
 	AnimLayer = WeaponData.AnimLayer
 		? WeaponData.AnimLayer
@@ -287,6 +292,19 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	{
 		PickupWidget->SetVisibility(bShowWidget);
 	}
+}
+
+UAnimMontage* AWeapon::GetReloadMontage() const
+{
+	if (!ReloadMontage && !bWarnedMissingReloadMontage)
+	{
+		bWarnedMissingReloadMontage = true;
+		UE_LOG(LogTemp, Warning,
+			TEXT("'%s' has no ReloadMontage in its weapon data row: falling back to the character's reload montage."),
+			*GetNameSafe(this));
+	}
+
+	return ReloadMontage;
 }
 
 void AWeapon::Fire(bool bPlay, const FVector& HitTarget)
