@@ -15,6 +15,7 @@ Source/
       TPSCPPFireCooldownEffect.cpp / .h
       TPSCPPGameplayTags.cpp / .h
       TPSCPPGameplayCueManager.cpp / .h
+      TPSCPPGameplayCueTypes.h
       TPSCPPNativeGameplayCues.cpp / .h
       Abilities/
         TPSCPPGameplayAbility.cpp / .h
@@ -48,8 +49,11 @@ Source/
       HitScanWeapon.cpp / .h
       Projectile.cpp / .h
       ProjectileBullet.cpp / .h
+      ProjectileRocket.cpp / .h
       ProjectileWeapon.cpp / .h
+      ShotgunWeapon.cpp / .h
       Weapon.cpp / .h
+      WeaponData.h
 
 Content/                      — 蓝图、地图、材质、角色、输入资源、特效、武器、声音
   Assets/                     — 统一素材目录
@@ -61,6 +65,7 @@ Content/                      — 蓝图、地图、材质、角色、输入资�
     GameModes/                — 游戏模式蓝图（BP_LobbyGameMode 等）
     HUD/                      — WBP_CharacterOverlay、BP_PlayerHUD
     Weapon/                   — 武器/子弹/弹壳蓝图（Projectile/ 子目录）
+  Data/                       — 数据表（DT_Weapons：武器数值，见「武器数值来自数据表」）
   Characters/                 — BP_TPSCharacter, Iris 角色模型, Mannequins（动画/材质/网格/绑定/纹理）
   Collections/                — UE 辅助目录
   Developers/                 — UE 辅助目录
@@ -87,8 +92,8 @@ Plugins/
 ## 当前游戏性功能
 
 - 角色移动 / 跳跃 / 冲刺，以及 Hipfire / Shoulder / ADS 三种瞄准状态与平滑镜头过渡
-- 武器拾取 / 装备 / 丢弃（`UCombatComponent`），射速、全自动、伤害、ADS 等参数在蓝图可配置
-- 射击：`AProjectileWeapon` 生成 `AProjectileBullet`，`AHitScanWeapon` 走瞬时命中；命中角色后应用伤害；弹壳物理掉落
+- 武器拾取 / 装备 / 丢弃（`UCombatComponent`）；武器数值统一来自 `DT_Weapons`（`FWeaponData`），不再逐蓝图调参
+- 射击：`AProjectileWeapon` 生成 `AProjectileBullet`，`AHitScanWeapon` 走瞬时命中，`AShotgunWeapon` 一次发射多颗弹丸（锥形散布，`PelletCount` / `PelletSpreadMaxAngleDegrees`）；命中角色后应用伤害；弹壳物理掉落
 - 生命值：`Health`/`MaxHealth` 属性在 `UTPSCPPHealthSet`，伤害经 `UTPSCPPDamageEffect`（GE）应用；HUD 由属性变更委托驱动
 - 淘汰：血量归零后 `ATPSCPPGameMode::PlayerEliminated` 触发多播 `Elim()`：关闭碰撞、掉落武器、mesh 布娃娃，5 秒后销毁 Actor
 
@@ -171,7 +176,8 @@ Plugins/
 | 弹药消耗 | `UTPSCPPAbilityCost_WeaponAmmo`（自定义 Cost，经 `CommitAbility`） |
 | 射速限制 | `UTPSCPPFireCooldownEffect`（SetByCaller 时长的冷却 GE） |
 | 生命值 / 伤害 | `UTPSCPPHealthSet` + `UTPSCPPDamageEffect` |
-| 命中 / 落点特效 | `Cue.Hit.Blood` / `Cue.Weapon.Impact`（native GameplayCue 类） |
+| 命中 / 落点特效 | 角色命中只播放 `Cue.Hit.Blood`；环境命中播放 `Cue.Weapon.Impact`。命中点与运行时特效引用经多播批量下发 |
+| 武器数值 | `FWeaponData` 数据表（`/Game/Data/DT_Weapons`）→ `AWeapon::ApplyWeaponData()` |
 | 角色状态（换弹 / 瞄准 / 冲刺 / 开火） | `State.*` GameplayTag，驱动动画与能力门禁 |
 | 动画状态 | `UTPSCPPAnimInstance` + `FGameplayTagBlueprintPropertyMap`（tag → `GameplayTag_Is*` 变量） |
 
@@ -188,6 +194,15 @@ Plugins/
   **默认参数 `None` 完全不复制**，只会改本机计数。
 - **表现**：统一走 GameplayCue。native C++ cue **不会**被自动注册，必须经
   `TPSCPPNativeGameplayCues` 加入 cue set（并在每次世界初始化后重注册）。
+  命中点在**自己写的多播**里传给每台机器，实现内用
+  `UGameplayCueManager::ExecuteGameplayCue_NonReplicated` 本地执行（细节见下）；
+  多发弹药（霰弹枪）必须**一发一条 RPC 携带命中点数组和 `FTPSCPPCueImpactFX` 特效引用**，
+  远程端用 `UTPSCPPCueImpactFXSource` 作为 cue 的 `SourceObject`。
+- **武器数值来自数据表**：`FWeaponData`（`Weapon/WeaponData.h`）+ `AWeapon::ApplyWeaponData()`，
+  默认表 `/Game/Data/DT_Weapons`，行名默认 = 类名（`BP_Shotgun_C` → `BP_Shotgun`）。
+  运行时以**行值**为准：标量无条件覆盖，对象/类指针仅在行里配了才覆盖（否则保留蓝图值）；
+  所以改数值请改表，蓝图里的同名字段只是兜底/参考（缺行时 `ApplyWeaponData` 会 `Error` 并全部走字段默认值）。
+  `FireDelay` / `Damage` / `MagCapacity` / `ReloadTime` / `bAutomatic` 因此也是能力调参的唯一来源。
 - **GE 用 C++ 类**，不新建蓝图 GE 资产；参数用 SetByCaller（`Data.Damage` / `Data.Cooldown`）。
 - **动画**：不要在 Tick 里反射推属性；新增动画状态 = 加一个 tag + 在
   `UTPSCPPAnimInstance::AddDefaultMappings()` 里加一行映射（属性名对应 ABP 里的 `GameplayTag_Is*`）。
@@ -198,9 +213,14 @@ Plugins/
 预测边界、`ServerOnly` 能力取消、hitscan vs 投射物等），新增 GAS 功能前**先读一遍**。要点：
 
 - native C++ GameplayCue 类**不会被自动注册**，漏注册会**静默丢弃**（日志无提示）。
-- 手动 `ExecuteGameplayCue` **不复制**到客户端；本项目用可靠多播在每台机器本地执行。
+- **ability system 的 cue 多播是 Unreliable，且每个 net update 限流 `net.MaxRPCPerNetUpdate`（默认 2）条**；
+  自己写多播时**不要**在实现里再调 `ASC->ExecuteGameplayCue`（会重复播放 + 被限流丢弃），
+  改用 `UGameplayCueManager::ExecuteGameplayCue_NonReplicated(ASC->GetOwner(), Tag, Params)` 本地执行。
+- **多发弹药（霰弹枪）必须批量**：一发一条 RPC 携带全部命中点（`FTPSCPPCueImpact` 数组），
+  血液 cue 按受害者分组；逐弹丸发 cue 会导致客户端只看到前 2 个弹着点。
 - 本地表现（相机/ADS）必须由发起端执行，不能在 `ServerOnly` 能力里做。
-- 同帧 spawn+destroy 的对象只能用 **Reliable** 多播，且 cue 参数里不要依赖该 Actor 的弱指针（用 CDO）。
+- 同帧 spawn+destroy 的对象只能用 **Reliable** 多播，且 cue 参数里不要依赖该 Actor 的弱指针；把武器表解析出的
+  粒子/音效放进 `FTPSCPPCueImpactFX`，由 `UTPSCPPCueImpactFXSource` 传给 cue。
 - `ServerOnly` 能力**无法被客户端取消**（`CancelAbilities` 跳过非激活 spec），需要 `Server_` RPC 转达。
 
 ## AI 代理专用说明

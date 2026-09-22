@@ -19,8 +19,10 @@ public:
 	virtual void Fire(bool bPlay, const FVector& HitTarget) override;
 
 	virtual void PrewarmFireAssets() override;
+
+	virtual void ApplyWeaponData(bool bInitializeRuntimeState = true) override;
 	
 private:
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<AProjectile> ProjectileClass;
 };

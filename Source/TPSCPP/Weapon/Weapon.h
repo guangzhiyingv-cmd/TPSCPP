@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Weapon/WeaponData.h"
 #include "Weapon.generated.h"
 
 class UAnimInstance;
@@ -42,8 +43,25 @@ public:
 	UWidgetComponent* PickupWidget;
 
 protected:
+	virtual void PostInitializeComponents() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Data")
+	FDataTableRowHandle WeaponDataRow;
+
+	/** Shared weapon table used when WeaponDataRow does not specify a table. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Data")
+	TSoftObjectPtr<UDataTable> DefaultWeaponDataTable =
+		TSoftObjectPtr<UDataTable>(FSoftObjectPath(TEXT("/Game/Data/DT_Weapons.DT_Weapons")));
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Weapon Data")
+	FWeaponData WeaponData;
+
+	virtual void ApplyWeaponData(bool bInitializeRuntimeState = true);
+
+	/** Tracks whether this actor has already received its initial data-table runtime state. */
+	bool bWeaponDataInitialized = false;
 
 	/** When enabled, fire assets and actors are prewarmed shortly after BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Prewarm")
@@ -117,6 +135,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Animation")
 	TSubclassOf<UAnimInstance> GetAnimLayer() const { return AnimLayer; }
 
+	UFUNCTION(BlueprintPure, Category = "Weapon Data")
+	const FWeaponData& GetWeaponData() const { return WeaponData; }
+
+	/** Shotguns disable screen-space aim spread so all pellets share the exact screen center. */
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	virtual bool ShouldApplyAimSpread() const { return true; }
+
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	int32 GetPelletCount() const { return PelletCount; }
+
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	float GetPelletSpreadAngleDegrees() const { return CurrentPelletSpreadAngleDegrees; }
+
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	float GetPelletSpreadMaxAngleDegrees() const { return PelletSpreadMaxAngleDegrees; }
+
+	/** Sets the current pellet angle. The value is clamped to the configured maximum. */
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	void SetPelletSpreadAngleDegrees(float NewAngle);
+
+	/** Sets the runtime maximum pellet angle and clamps the current angle. */
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	void SetPelletSpreadMaxAngleDegrees(float NewMaxAngle);
+
 	/** Records the current world time as the last time this weapon fired. */
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	void UpdateFiringTime();
@@ -132,11 +174,11 @@ public:
 	double TimeLastFired = 0.0;
 
 	/** Casing actor class ejected when the weapon fires. */
-	UPROPERTY(EditAnywhere, Category = "Weapon")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	TSubclassOf<class ACasing> CasingClass;
 
 	/** Impulse applied to the ejected casing along the AmmoEject socket +X axis. */
-	UPROPERTY(EditAnywhere, Category = "Weapon", meta = (ClampMin = 0))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", meta = (ClampMin = 0))
 	float EjectImpulseStrength = 500.f;
 
 	/** Seconds between consecutive shots. Controls the weapon fire rate. */
@@ -149,6 +191,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	float Damage = 20;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapon")
+	int32 PelletCount = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapon")
+	float PelletSpreadMaxAngleDegrees = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapon")
+	float CurrentPelletSpreadAngleDegrees = 0.f;
 
 	/** Magazine capacity of this weapon. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo", meta = (ClampMin = 1))
@@ -231,14 +282,14 @@ public:
 	/**
 	* Textures for the weapon crosshairs
 	*/
-	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsCenter;
-	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsLeft;
-	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsRight;
-	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsTop;
-	UPROPERTY(EditAnywhere, Category = "Crosshairs")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsBottom;
 };

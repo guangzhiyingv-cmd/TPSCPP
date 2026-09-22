@@ -18,7 +18,9 @@ protected:
 		UPrimitiveComponent* OtherComp, FVector NormalImpulse,
 		const FHitResult& Hit) override;
 
-	UPROPERTY(EditAnywhere,category = "Damage")
+	virtual void ApplyWeaponData(const FWeaponData& InWeaponData) override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	float ExplosionRadius = 500;
 private:
 

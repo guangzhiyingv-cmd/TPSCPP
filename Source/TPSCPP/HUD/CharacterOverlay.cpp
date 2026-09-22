@@ -4,6 +4,33 @@
 #include "HUD/CharacterOverlay.h"
 #include "Components/ProgressBar.h"
 #include "Curves/CurveFloat.h"
+#include "HAL/IConsoleManager.h"
+
+#if !UE_BUILD_SHIPPING
+// Debug-only timing of the health bar interpolation: this is the visible (cosmetic) part of the
+// health latency, separate from the replication cost measured in TPSCPPCharacter.cpp. One overlay
+// per PIE client, so plain file scope state is enough.
+namespace
+{
+	double GHealthInterpStart = 0.0;
+	bool bGHealthInterpTiming = false;
+
+	bool HealthLatencyDebugEnabled()
+	{
+		static IConsoleVariable* CVar =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("tpscpp.DebugHealthLatency"));
+		return CVar && CVar->GetInt() > 0;
+	}
+
+	void LogHealthInterp(const float InterpSpeed, const UCurveFloat* Curve, double StartSeconds)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HealthLatency|VISUAL interp=%.0fms speed=%.2f curve=%s"),
+			(FPlatformTime::Seconds() - StartSeconds) * 1000.0,
+			InterpSpeed,
+			*GetNameSafe(Curve));
+	}
+}
+#endif
 
 void UCharacterOverlay::SetHealthPercent(float Health, float MaxHealth)
 {
@@ -20,12 +47,28 @@ void UCharacterOverlay::SetHealthPercent(float Health, float MaxHealth)
 		{
 			HealthBar->SetPercent(CurrentHealthPercent);
 		}
+
+#if !UE_BUILD_SHIPPING
+		if (HealthLatencyDebugEnabled())
+		{
+			// No curve: the bar snaps, so the cosmetic term of the latency is zero.
+			LogHealthInterp(HealthBarInterpSpeed, HealthBarCurve, FPlatformTime::Seconds());
+		}
+#endif
 		return;
 	}
 
 	StartHealthPercent = CurrentHealthPercent;
 	InterpProgress = 0.f;
 	bInterpolating = true;
+
+#if !UE_BUILD_SHIPPING
+	if (HealthLatencyDebugEnabled())
+	{
+		GHealthInterpStart = FPlatformTime::Seconds();
+		bGHealthInterpTiming = true;
+	}
+#endif
 }
 
 void UCharacterOverlay::SetTimeText(float Seconds)
@@ -58,6 +101,14 @@ void UCharacterOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		CurrentHealthPercent = TargetHealthPercent;
 		HealthBar->SetPercent(CurrentHealthPercent);
 		bInterpolating = false;
+
+#if !UE_BUILD_SHIPPING
+		if (bGHealthInterpTiming)
+		{
+			bGHealthInterpTiming = false;
+			LogHealthInterp(HealthBarInterpSpeed, HealthBarCurve, GHealthInterpStart);
+		}
+#endif
 	}
 }
 

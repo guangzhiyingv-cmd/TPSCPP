@@ -7,6 +7,11 @@
 
 ATPSCPPPlayerState::ATPSCPPPlayerState()
 {
+	// APlayerState defaults its net update frequency to 1 Hz, but this is the actor that hosts the
+	// ability system and therefore the replicated health attributes: at 1 Hz a health change waits
+	// up to a full second before the owning client sees it. Match Lyra (ALyraPlayerState) here.
+	SetNetUpdateFrequency(100.f);
+
 	AbilitySystemComponent = CreateDefaultSubobject<UTPSCPPAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
 	// Player controlled ASC: gameplay effects go to the owner, attributes to everyone.

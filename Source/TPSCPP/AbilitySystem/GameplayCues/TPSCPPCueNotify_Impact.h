@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayCueNotify_Static.h"
+#include "AbilitySystem/TPSCPPGameplayCueTypes.h"
 #include "TPSCPPCueNotify_Impact.generated.h"
 
 /**

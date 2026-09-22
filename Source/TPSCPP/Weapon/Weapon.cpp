@@ -6,8 +6,23 @@
 #include "TPSCPPCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "Animation/AnimationAsset.h"
+#include "Curves/CurveFloat.h"
+#include "Engine/SkeletalMesh.h"
+#include "Engine/Texture2D.h"
+#include "Particles/ParticleSystem.h"
+#include "Sound/SoundBase.h"
 #include "TimerManager.h"
 #include "Weapon/Casing.h"
+
+namespace
+{
+	template <typename TObjectType>
+	TObjectType* LoadSoftObject(const TSoftObjectPtr<TObjectType>& SoftObject)
+	{
+		return SoftObject.IsNull() ? nullptr : SoftObject.LoadSynchronous();
+	}
+}
 
 AWeapon::AWeapon()
 {
@@ -36,6 +51,120 @@ AWeapon::AWeapon()
 	Ammo = MagCapacity;
 }
 
+void AWeapon::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	ApplyWeaponData(true);
+}
+
+void AWeapon::ApplyWeaponData(bool bInitializeRuntimeState)
+{
+	const UDataTable* ResolvedDataTable = WeaponDataRow.DataTable;
+	if (!ResolvedDataTable && !DefaultWeaponDataTable.IsNull())
+	{
+		ResolvedDataTable = DefaultWeaponDataTable.LoadSynchronous();
+	}
+
+	if (!ResolvedDataTable)
+	{
+		UE_LOG(LogTemp, Error, TEXT("'%s' could not resolve a weapon data table."), *GetNameSafe(this));
+		return;
+	}
+
+	FName ResolvedRowName = WeaponDataRow.RowName;
+	if (ResolvedRowName.IsNone())
+	{
+		FString ClassName = GetClass()->GetName();
+		ClassName.RemoveFromEnd(TEXT("_C"));
+		ResolvedRowName = FName(*ClassName);
+	}
+
+	const FWeaponData* Row = ResolvedDataTable->FindRow<FWeaponData>(
+		ResolvedRowName,
+		TEXT("AWeapon::ApplyWeaponData"),
+		true);
+
+	if (!Row)
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("'%s' could not find weapon data row '%s'."),
+			*GetNameSafe(this),
+			*ResolvedRowName.ToString());
+		return;
+	}
+
+	WeaponData = *Row;
+
+	const bool bHasMeshOverride = !WeaponData.WeaponMesh.IsNull();
+	if (bHasMeshOverride && WeaponMesh)
+	{
+		WeaponMesh->SetSkeletalMeshAsset(LoadSoftObject(WeaponData.WeaponMesh));
+	}
+
+	FireAnim = WeaponData.FireAnim.IsNull()
+		? FireAnim
+		: LoadSoftObject(WeaponData.FireAnim);
+
+	AnimLayer = WeaponData.AnimLayer
+		? WeaponData.AnimLayer
+		: AnimLayer;
+	CasingClass = WeaponData.CasingClass
+		? WeaponData.CasingClass
+		: CasingClass;
+	EjectImpulseStrength = WeaponData.EjectImpulseStrength;
+	bPrewarmFireAssets = WeaponData.bPrewarmFireAssets;
+	PrewarmSpawnCount = WeaponData.PrewarmSpawnCount;
+	PrewarmSpawnDepth = WeaponData.PrewarmSpawnDepth;
+	FireDelay = WeaponData.FireDelay;
+	bAutomatic = WeaponData.bAutomatic;
+	Damage = WeaponData.Damage;
+	PelletCount = FMath::Max(WeaponData.PelletCount, 1);
+	PelletSpreadMaxAngleDegrees = FMath::Max(WeaponData.PelletSpreadMaxAngleDegrees, 0.f);
+	CurrentPelletSpreadAngleDegrees = PelletSpreadMaxAngleDegrees;
+	MagCapacity = FMath::Max(WeaponData.MagCapacity, 1);
+	if (bInitializeRuntimeState || !bWeaponDataInitialized)
+	{
+		Ammo = MagCapacity;
+	}
+	bWeaponDataInitialized = true;
+	ReloadTime = WeaponData.ReloadTime;
+	bInfiniteAmmo = WeaponData.bInfiniteAmmo;
+	ADSTimelinePlayRate = WeaponData.ADSTimelinePlayRate;
+	FPSWeaponRelativeLocation = WeaponData.FPSWeaponRelativeLocation;
+	ADSFOV = WeaponData.ADSFOV;
+	ADSSensitivity = WeaponData.ADSSensitivity;
+	SingleShotHorizontalRecoil = WeaponData.SingleShotHorizontalRecoil;
+	SingleShotVerticalRecoil = WeaponData.SingleShotVerticalRecoil;
+	AutoRecoilHorizontalCurve = WeaponData.AutoRecoilHorizontalCurve.IsNull()
+		? AutoRecoilHorizontalCurve
+		: LoadSoftObject(WeaponData.AutoRecoilHorizontalCurve);
+	AutoRecoilVerticalCurve = WeaponData.AutoRecoilVerticalCurve.IsNull()
+		? AutoRecoilVerticalCurve
+		: LoadSoftObject(WeaponData.AutoRecoilVerticalCurve);
+	HorizontalRecoilPerturbation = WeaponData.HorizontalRecoilPerturbation;
+	VerticalRecoilPerturbation = WeaponData.VerticalRecoilPerturbation;
+	RecoilRecoverySpeed = WeaponData.RecoilRecoverySpeed;
+	RecoilRecoveryDelay = WeaponData.RecoilRecoveryDelay;
+	VerticalRecoilRecoveryMultiplier = WeaponData.VerticalRecoilRecoveryMultiplier;
+	CrosshairsCenter = WeaponData.CrosshairsCenter.IsNull()
+		? CrosshairsCenter
+		: LoadSoftObject(WeaponData.CrosshairsCenter);
+	CrosshairsLeft = WeaponData.CrosshairsLeft.IsNull()
+		? CrosshairsLeft
+		: LoadSoftObject(WeaponData.CrosshairsLeft);
+	CrosshairsRight = WeaponData.CrosshairsRight.IsNull()
+		? CrosshairsRight
+		: LoadSoftObject(WeaponData.CrosshairsRight);
+	CrosshairsTop = WeaponData.CrosshairsTop.IsNull()
+		? CrosshairsTop
+		: LoadSoftObject(WeaponData.CrosshairsTop);
+	CrosshairsBottom = WeaponData.CrosshairsBottom.IsNull()
+		? CrosshairsBottom
+		: LoadSoftObject(WeaponData.CrosshairsBottom);
+}
+
 void AWeapon::SetAreaSphereCollisionEnabled(bool bEnabled)
 {
 	AreaSphere->SetCollisionEnabled(bEnabled ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
@@ -44,6 +173,11 @@ void AWeapon::SetAreaSphereCollisionEnabled(bool bEnabled)
 void AWeapon::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Refresh cached presentation data before the weapon becomes active. This makes PIE use the
+	// current DataTable asset even when an already-loaded editor world actor still holds stale
+	// transient values from an earlier data-table edit.
+	ApplyWeaponData(false);
 
 	if (HasAuthority())
 	{
@@ -87,6 +221,25 @@ void AWeapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeP
 
 	DOREPLIFETIME(AWeapon, WeaponState);
 	DOREPLIFETIME_CONDITION(AWeapon, Ammo, COND_OwnerOnly);
+	DOREPLIFETIME(AWeapon, PelletCount);
+	DOREPLIFETIME(AWeapon, PelletSpreadMaxAngleDegrees);
+	DOREPLIFETIME(AWeapon, CurrentPelletSpreadAngleDegrees);
+}
+
+void AWeapon::SetPelletSpreadAngleDegrees(float NewAngle)
+{
+	CurrentPelletSpreadAngleDegrees = FMath::Clamp(
+		NewAngle,
+		0.f,
+		PelletSpreadMaxAngleDegrees);
+}
+
+void AWeapon::SetPelletSpreadMaxAngleDegrees(float NewMaxAngle)
+{
+	PelletSpreadMaxAngleDegrees = FMath::Max(NewMaxAngle, 0.f);
+	CurrentPelletSpreadAngleDegrees = FMath::Min(
+		CurrentPelletSpreadAngleDegrees,
+		PelletSpreadMaxAngleDegrees);
 }
 
 void AWeapon::OnSphereOverlap(
@@ -139,9 +292,10 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 void AWeapon::Fire(bool bPlay, const FVector& HitTarget)
 {
 	USkeletalMeshComponent* TargetMesh = WeaponMesh;
+	ATPSCPPCharacter* OwnerCharacter = Cast<ATPSCPPCharacter>(GetOwner());
 
 	// ADS: play on the first-person view model instead of the third-person mesh
-	if (ATPSCPPCharacter* OwnerCharacter = Cast<ATPSCPPCharacter>(GetOwner()))
+	if (OwnerCharacter)
 	{
 		if (OwnerCharacter->IsLocallyControlled() && OwnerCharacter->GetAimState() == EAimState::ADS)
 		{
@@ -163,7 +317,7 @@ void AWeapon::Fire(bool bPlay, const FVector& HitTarget)
 	}
 	else
 	{
-		TargetMesh->Stop();
+		//TargetMesh->Stop();
 	}
 
 	// Spawn and eject a casing at the AmmoEject socket when firing

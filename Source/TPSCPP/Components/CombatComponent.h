@@ -95,7 +95,7 @@ private:
 	/** Plays (or stops) the fire presentation locally: weapon animation, fire reaction and ADS recoil. */
 	void PlayFireCosmetics(bool bPressed, const FVector_NetQuantize& InHitTarget);
 
-	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
+	void TraceUnderCrosshairs(FHitResult& TraceHitResult, bool bApplyAimSpread = true);
 
 	/** Multiplies character speed to determine crosshair spread. */
 	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))

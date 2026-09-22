@@ -36,13 +36,18 @@ void UTPSCPPCueNotify_Impact::HandleGameplayCue(AActor* MyTarget, EGameplayCueEv
 		return;
 	}
 
-	// The assets stay configured on whichever actor reported the surface hit: a projectile or a
-	// hitscan weapon.
+	// The source can be a transient FX carrier sent by a cue multicast, or the actor that reported
+	// the hit when the cue is executed through another path.
 	const UObject* Source = Parameters.SourceObject.Get();
 	UParticleSystem* Particles = nullptr;
 	USoundBase* Sound = nullptr;
 
-	if (const AProjectile* Projectile = Cast<AProjectile>(Source))
+	if (const UTPSCPPCueImpactFXSource* ImpactFX = Cast<UTPSCPPCueImpactFXSource>(Source))
+	{
+		Particles = ImpactFX->Particles;
+		Sound = ImpactFX->Sound;
+	}
+	else if (const AProjectile* Projectile = Cast<AProjectile>(Source))
 	{
 		Particles = Projectile->HitParticles;
 		Sound = Projectile->HitSound;

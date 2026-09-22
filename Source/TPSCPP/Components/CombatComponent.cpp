@@ -208,7 +208,9 @@ void UCombatComponent::Fire()
 	if (!EquippedWeapon || GetPredictedAmmo() <= 0) return;
 
 	FHitResult TraceHitResult;
-	TraceUnderCrosshairs(TraceHitResult);
+	TraceUnderCrosshairs(
+		TraceHitResult,
+		EquippedWeapon ? EquippedWeapon->ShouldApplyAimSpread() : true);
 	if (Character)
 	{
 		Character->ApplyWeaponRecoil(
@@ -318,7 +320,9 @@ void UCombatComponent::PlayFireCosmetics(bool bPressed, const FVector_NetQuantiz
 }
 
 
-void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
+void UCombatComponent::TraceUnderCrosshairs(
+	FHitResult& TraceHitResult,
+	bool bApplyAimSpread)
 {
 	FVector2D ViewportSize = FVector2D::ZeroVector;
 	if (GEngine && GEngine->GameViewport)
@@ -329,7 +333,10 @@ void UCombatComponent::TraceUnderCrosshairs(FHitResult& TraceHitResult)
 	FVector CrosshairWorldPosition;
 	FVector CrosshairWorldDirection;
 	
-	CrosshairLocation += FMath::RandPointInCircle(ShootingSpread);		//Random Spread Shooting
+	if (bApplyAimSpread)
+	{
+		CrosshairLocation += FMath::RandPointInCircle(ShootingSpread);
+	}
 	
 	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
 		UGameplayStatics::GetPlayerController(this, 0),

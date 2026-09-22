@@ -5,6 +5,14 @@
 #include "Engine/SkeletalMeshSocket.h"
 #include "Projectile.h"
 
+void AProjectileWeapon::ApplyWeaponData(bool bInitializeRuntimeState)
+{
+	Super::ApplyWeaponData(bInitializeRuntimeState);
+	ProjectileClass = WeaponData.ProjectileClass
+		? WeaponData.ProjectileClass
+		: ProjectileClass;
+}
+
 void AProjectileWeapon::Fire(bool bPlay, const FVector& HitTarget)
 {
 	Super::Fire(bPlay,HitTarget);
@@ -35,6 +43,7 @@ void AProjectileWeapon::Fire(bool bPlay, const FVector& HitTarget)
 				);
 				if (SpawnedProjectile)
 				{
+					SpawnedProjectile->ApplyWeaponData(WeaponData);
 					SpawnedProjectile->SetDamage(Damage);
 				}
 			}

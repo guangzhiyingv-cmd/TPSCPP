@@ -27,11 +27,37 @@
   子类可在 `Super` 之后补注册，覆盖"建表/重建表"的所有路径。
 - 排查手法：在注册处/cue 处理处/cue 执行处各加一行临时日志；"注册失败"与"执行没到"症状相同（都没特效）。
 
-### 1.2 手动 `ExecuteGameplayCue` 不会复制到客户端
-5.8 的 `UAbilitySystemComponent` 已无 cue replication proxy，手动调用的 cue **只在本地执行**。
-因此本项目保留原有的 `NetMulticast/Reliable` RPC，在**每台机器上本地执行一次**同一 cue
-（每机恰好一次，不会重复）。将来做预测阶段时，可改为由 GE 授予 cue（`UGameplayEffect::GameplayCues`
-+ effect context 携带命中点），届时这些多播 RPC 可整体删除。
+### 1.2 手动 `ExecuteGameplayCue` 与 cue 多播的 RPC 预算（关键）
+**权威端**调 `ASC->ExecuteGameplayCue(...)` **会**经 cue manager 走
+`NetMulticast_InvokeGameplayCueExecuted_WithParams`（`UFUNCTION(NetMulticast, **unreliable**)`）
+广播给客户端。两个后果：
+
+1. **重复执行**：如果自己做了一条多播（本项目 `MulticastExecuteImpactCues` / `MulticastExecuteBloodCues`）
+   并在实现里又调 `ASC->ExecuteGameplayCue`，那客户端会**播两遍**（自己的多播一次 + GAS 多播一次）。
+2. **静默丢弃**：net driver 对**不可靠多播**限流——同一个 RPC 每个 net update 最多发
+   `net.MaxRPCPerNetUpdate` 次（默认 **2**），超出的直接丢弃（`DataReplication.cpp:2324`，
+   `LogRep Verbose`）。GAS 会额外打一条 Warning：
+   `Attempted to fire ... when no more RPCs are allowed this net update. Max:2`
+   （`GameplayCueManager.cpp` 的 `CheckForTooManyRPCs`，只是提示，真正丢包在 net driver）。
+
+**已验证做法**：自己做多播时，实现里**一律不经过 ability system**，直接本地执行：
+```cpp
+UGameplayCueManager::ExecuteGameplayCue_NonReplicated(ASC->GetOwner(), CueTag, Params);
+```
+它是 static 包装，内部只 `HandleGameplayCue(TargetActor, Tag, Executed, Params)` → 不排队、不广播，
+且 `TargetActor` 与 ASC 排队路径一致（都是 `OwningComponent->GetOwner()`）。
+
+**多发弹药必须批量**：霰弹枪一枪 8 颗弹丸，如果每颗弹丸各发一条 impact cue + 一条 blood cue，
+每个 net update 只有前 2 条能出去 → 客户端只看到 2 个弹着点。做法：
+**一发一条 RPC + 命中点数组 + FX**（`FTPSCPPCueImpact = FVector_NetQuantize Location + FRotator Rotation`，
+`FTPSCPPCueImpactFX = TSoftObjectPtr Particles + Sound`，见 `AbilitySystem/TPSCPPGameplayCueTypes.h`）。
+远程端从 RPC 的 FX 创建 `UTPSCPPCueImpactFXSource` 并作为 `Params.SourceObject`；血液 cue 按**受害者分组**，
+每个受害者一条。命中角色时只把该点加入 blood cue，不再加入 `Cue.Weapon.Impact`；环境命中才播放 surface FX。
+角色受击 cue 直接以复制后的 victim actor 作为 manager target，避免远程客户端因 PlayerState/ASC 尚未绑定而静默丢 cue。
+多条 cue 在同一帧连续本地 spawn 时注意性能（必要时做数量裁剪）。
+
+将来做预测阶段时，可改为由 GE 授予 cue（`UGameplayEffect::GameplayCues` + effect context 携带命中点），
+届时这些多播 RPC 可整体删除；但注意 GE 也是"每颗弹丸一份 spec"，批量问题依然存在。
 
 ### 1.3 Cue 参数里的弱指针 + 帧末 flush
 `FGameplayCueParameters` 里的 `SourceObject` / `Instigator` / `EffectCauser` 都是弱指针，
@@ -133,9 +159,14 @@ GEComponents.Add(TagsComponent);
 
 ### 4.1 同帧 spawn + destroy 的对象要用 Reliable 多播
 子弹命中即销毁时，**不可靠多播会被丢弃**（客户端什么都收不到，尤其贴脸射击）。
-本项目：`AProjectile::MulticastExecuteImpactCue` 等一律 `NetMulticast, Reliable`，
+本项目：`AProjectile::MulticastExecuteImpactCue` 一律 `NetMulticast, Reliable`，
 在销毁前把表现数据（命中点/法线）发出去；不能依赖该 Actor 之后还存在于客户端。
-配合 1.3，cue 需要的资产引用也要用 CDO 而不是 Actor 实例。
+配合 1.3，cue 需要的资产引用必须随 RPC 发出；武器数据表解析出的粒子/音效放进 `FTPSCPPCueImpactFX`，
+不能依赖投射物或武器 CDO。
+
+> 注意区分：**自己写的**多播按需选 Reliable（长命 Actor 上的 cosmetic 用 Unreliable 即可），
+> 而**ability system 的 cue 多播是 Unreliable 且每 net update 限流 2 条**（见 1.2）——
+> 多发弹药必须批量，且不要让自己的多播再去触发 cue 多播。
 
 ---
 

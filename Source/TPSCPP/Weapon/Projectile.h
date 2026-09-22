@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Engine/NetSerialization.h"
+#include "AbilitySystem/TPSCPPGameplayCueTypes.h"
+#include "Weapon/WeaponData.h"
 #include "Projectile.generated.h"
 
 UCLASS()
@@ -36,7 +38,10 @@ protected:
 	 * destroyed and its net channel closes.
 	 */
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastExecuteImpactCue(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+	void MulticastExecuteImpactCue(
+		const FVector_NetQuantize& ImpactPoint,
+		const FRotator& ImpactRotation,
+		const FTPSCPPCueImpactFX& ImpactFX);
 
 	UPROPERTY(EditAnywhere)
 	float Damage = 0.f;
@@ -44,6 +49,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	void SetDamage(float NewDamage);
+
+	virtual void ApplyWeaponData(const FWeaponData& InWeaponData);
 
 	/** Marks this projectile as a prewarm dummy so it skips damage and impact effects. */
 	void SetPrewarmDummy(bool bInPrewarmDummy) { bPrewarmDummy = bInPrewarmDummy; }

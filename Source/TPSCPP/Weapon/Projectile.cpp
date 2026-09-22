@@ -7,7 +7,9 @@
 #include "Sound/SoundBase.h"
 #include "TPSCPPCharacter.h"
 #include "AbilitySystemComponent.h"
+#include "AbilitySystem/GameplayCues/TPSCPPCueNotify_Impact.h"
 #include "AbilitySystem/TPSCPPGameplayTags.h"
+#include "GameplayCueManager.h"
 #include "GameplayEffectTypes.h"
 #include "TPSCPP.h"
 
@@ -60,38 +62,69 @@ void AProjectile::OnHit(
 {
 	if (bPrewarmDummy || !HasAuthority()) return;
 
-	// Broadcast the impact cue first, so it reaches every machine even when the projectile is
-	// spawned and destroyed within a single frame and therefore never replicates to clients.
-	MulticastExecuteImpactCue(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
-
+	// A projectile destroyed in the same frame it hits never exists long enough for its clients to
+	// inspect, so presentation data is sent before the character branch. Body hits receive the blood
+	// cue only; the surface impact cue remains reserved for environment hits.
 	if (ATPSCPPCharacter* HitCharacter = Cast<ATPSCPPCharacter>(OtherActor))
 	{
-		HitCharacter->MulticastExecuteBloodCue(Hit.ImpactPoint, Hit.ImpactNormal.Rotation());
+		TArray<FTPSCPPCueImpact> Impacts;
+		FTPSCPPCueImpact Impact;
+		Impact.Location = Hit.ImpactPoint;
+		Impact.Rotation = Hit.ImpactNormal.Rotation();
+		Impacts.Add(Impact);
+
+		HitCharacter->MulticastExecuteBloodCues(Impacts);
+	}
+	else
+	{
+		FTPSCPPCueImpactFX ImpactFX;
+		ImpactFX.Particles = TSoftObjectPtr<UParticleSystem>(HitParticles);
+		ImpactFX.Sound = TSoftObjectPtr<USoundBase>(HitSound);
+
+		MulticastExecuteImpactCue(Hit.ImpactPoint, Hit.ImpactNormal.Rotation(), ImpactFX);
 	}
 
 	Destroy();
 }
 
-void AProjectile::MulticastExecuteImpactCue_Implementation(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation)
+void AProjectile::MulticastExecuteImpactCue_Implementation(
+	const FVector_NetQuantize& ImpactPoint,
+	const FRotator& ImpactRotation,
+	const FTPSCPPCueImpactFX& ImpactFX)
 {
-	// Carry the impact data in the cue parameters instead of reading it back from this actor: the
-	// actor may already be gone on a remote machine by the time a cue would resolve it.
+	AActor* TargetActor = GetInstigator();
+	if (!TargetActor)
+	{
+		TargetActor = GetOwner();
+	}
+
+	if (!TargetActor)
+	{
+		return;
+	}
+
+	UTPSCPPCueImpactFXSource* FXSource = NewObject<UTPSCPPCueImpactFXSource>(GetTransientPackage(), NAME_None, RF_Transient);
+	FXSource->Particles = ImpactFX.Particles.LoadSynchronous();
+	FXSource->Sound = ImpactFX.Sound.LoadSynchronous();
+
+	if (!FXSource->Particles && !FXSource->Sound)
+	{
+		return;
+	}
+
 	FGameplayCueParameters Params;
 	Params.Location = ImpactPoint;
 	Params.Normal = ImpactRotation.Vector();
-	// The class default object, not the actor: the cue is executed at the end of the frame, by which
-	// point a projectile that hit in the same frame it spawned is already gone on clients. The BP
-	// configured FX live on the class defaults, so the values are identical.
-	Params.SourceObject = GetClass()->GetDefaultObject();
+	Params.SourceObject = FXSource;
 
-	// The shooter owns the cosmetic cue for its own shots.
-	if (const ATPSCPPCharacter* InstigatorCharacter = Cast<ATPSCPPCharacter>(GetInstigator()))
-	{
-		if (UAbilitySystemComponent* ASC = InstigatorCharacter->GetAbilitySystemComponent())
-		{
-			ASC->ExecuteGameplayCue(TPSCPPGameplayTags::Cue_Weapon_Impact, Params);
-		}
-	}
+	// The FX travels with the RPC because a remote projectile replica never receives the firing
+	// weapon's data table application. Execute the static cue against the instigator directly: the
+	// local ability system can be absent on a remote shooter, and the multicast already reached
+	// every machine, so routing through ASC would broadcast the cue again.
+	UGameplayCueManager::ExecuteGameplayCue_NonReplicated(
+		TargetActor,
+		TPSCPPGameplayTags::Cue_Weapon_Impact,
+		Params);
 }
 
 void AProjectile::Destroyed()
@@ -110,3 +143,30 @@ void AProjectile::SetDamage(float NewDamage)
 	Damage = NewDamage;
 }
 
+void AProjectile::ApplyWeaponData(const FWeaponData& InWeaponData)
+{
+	Damage = InWeaponData.Damage;
+
+	TracerParticleSystem = InWeaponData.TracerParticleSystem.IsNull()
+		? TracerParticleSystem
+		: InWeaponData.TracerParticleSystem.LoadSynchronous();
+	HitParticles = InWeaponData.HitParticles.IsNull()
+		? HitParticles
+		: InWeaponData.HitParticles.LoadSynchronous();
+	HitSound = InWeaponData.HitSound.IsNull()
+		? HitSound
+		: InWeaponData.HitSound.LoadSynchronous();
+
+	if (TracerParticle)
+	{
+		TracerParticle->SetTemplate(TracerParticleSystem);
+	}
+
+	if (ProjectileMovementComponent)
+	{
+		ProjectileMovementComponent->InitialSpeed = InWeaponData.ProjectileInitialSpeed;
+		ProjectileMovementComponent->MaxSpeed = InWeaponData.ProjectileMaxSpeed;
+		ProjectileMovementComponent->Velocity =
+			GetActorForwardVector() * InWeaponData.ProjectileInitialSpeed;
+	}
+}

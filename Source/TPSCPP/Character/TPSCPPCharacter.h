@@ -9,6 +9,7 @@
 #include "Components/TimelineComponent.h"
 #include "Curves/CurveFloat.h"
 #include "AbilitySystemInterface.h"
+#include "AbilitySystem/TPSCPPGameplayCueTypes.h"
 #include "GameplayTagContainer.h"
 #include "TPSCPPCharacter.generated.h"
 
@@ -383,9 +384,14 @@ public:
 	/** Returns the montage used by the reload ability. */
 	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
 
-	/** Executes the blood gameplay cue on all machines at the authoritative hit point. */
+	/**
+	 * Executes the blood gameplay cue on every machine at the authoritative hit points. A shotgun
+	 * blast sends all of its pellets in one call: the ability system cue multicast is unreliable and
+	 * throttled to net.MaxRPCPerNetUpdate calls per net update, so one RPC per pellet would drop
+	 * most of the impacts.
+	 */
 	UFUNCTION(NetMulticast, Unreliable)
-	void MulticastExecuteBloodCue(const FVector_NetQuantize& ImpactPoint, const FRotator& ImpactRotation);
+	void MulticastExecuteBloodCues(const TArray<FTPSCPPCueImpact>& Impacts);
 
 	/** Niagara system played at the hit point when this character is shot. */
 	UFUNCTION(BlueprintPure, Category = "Effects")
