@@ -34,13 +34,23 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	class UTextBlock* TimeText;
 
+	/** Full screen reticle used while aiming down sights with a scoped weapon. */
+	UPROPERTY(meta = (BindWidget, OptionalWidget = true))
+	class UImage* ScopeReticleImage;
+
 	/** Starts an interpolated update of the health bar toward the new health value. */
 	void SetHealthPercent(float Health, float MaxHealth);
 
 	/** Updates the game time text. */
 	void SetTimeText(float Seconds);
 
+	/** Shows the scope reticle with the given texture, or hides the image when null. */
+	void SetScopeReticle(class UTexture2D* ReticleTexture);
+
 protected:
+	/** Hides the scope reticle on creation so the designer visibility cannot leak into gameplay. */
+	virtual void NativeConstruct() override;
+
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:

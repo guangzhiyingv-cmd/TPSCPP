@@ -429,54 +429,67 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 				HUDPackage.CrosshairBottom = nullptr;
 			}
 
-			// Crosshair spread grows with movement speed and narrows while aiming
-			// Ground speed (ignore Z axis) so slopes and vertical movement do not widen the crosshair
-			FVector CharacterVelocity = Character->GetVelocity();
-			CharacterVelocity.Z = 0.f;
-			float Spread = CharacterVelocity.Size() * VelocitySpreadMultiplier;
-
-			// Airborne spread: smoothly ramp to the bonus while in the air and recover to 0 after landing
-			if (!Character->GetCharacterMovement()->IsMovingOnGround())
+			// Spread parameters live on the equipped weapon, so every weapon tunes its own feel.
+			if (EquippedWeapon)
 			{
-				AirborneSpread = FMath::FInterpTo(AirborneSpread, AirborneSpreadBonus, DeltaTime, SpreadInterpSpeed);
+				// Crosshair spread grows with movement speed and narrows while aiming
+				// Ground speed (ignore Z axis) so slopes and vertical movement do not widen the crosshair
+				FVector CharacterVelocity = Character->GetVelocity();
+				CharacterVelocity.Z = 0.f;
+				float Spread = CharacterVelocity.Size() * EquippedWeapon->VelocitySpreadMultiplier;
+
+				// Airborne spread: smoothly ramp to the bonus while in the air and recover to 0 after landing
+				const float AirborneTarget = Character->GetCharacterMovement()->IsMovingOnGround()
+					? 0.f
+					: EquippedWeapon->AirborneSpreadBonus;
+				AirborneSpread = FMath::FInterpTo(
+					AirborneSpread,
+					AirborneTarget,
+					DeltaTime,
+					EquippedWeapon->SpreadInterpSpeed);
+				Spread += AirborneSpread;
+
+				// Aim reduction: interpolate toward the target reduction for the current aim state
+				float TargetAimReduction = 0.f;
+				switch (Character->GetAimState())
+				{
+				case EAimState::Shoulder:
+					TargetAimReduction = EquippedWeapon->ShoulderAimSpreadReduction;
+					break;
+				case EAimState::ADS:
+					TargetAimReduction = EquippedWeapon->ADSAimSpreadReduction;
+					break;
+				default:
+					break;
+				}
+				AimSpreadReduction = FMath::FInterpTo(
+					AimSpreadReduction,
+					TargetAimReduction,
+					DeltaTime,
+					EquippedWeapon->SpreadInterpSpeed);
+				Spread -= AimSpreadReduction;
+
+				// Final per-state minimum clamp; ADS is intentionally unclamped
+				switch (Character->GetAimState())
+				{
+				case EAimState::Hipfire:
+					Spread = FMath::Max(Spread, EquippedWeapon->HipfireMinSpread);
+					break;
+				case EAimState::Shoulder:
+					Spread = FMath::Max(Spread, EquippedWeapon->ShoulderMinSpread);
+					break;
+				case EAimState::ADS:
+					break;
+				default:
+					break;
+				}
+				ShootingSpread = FMath::Max(Spread, 0.f);
 			}
 			else
 			{
-				AirborneSpread = FMath::FInterpTo(AirborneSpread, 0.f, DeltaTime, SpreadInterpSpeed);
+				// Without a weapon there is no crosshair and no shot, so the spread is meaningless.
+				ShootingSpread = 0.f;
 			}
-			Spread += AirborneSpread;
-
-			// Aim reduction: interpolate toward the target reduction for the current aim state
-			float TargetAimReduction = 0.f;
-			switch (Character->GetAimState())
-			{
-			case EAimState::Shoulder:
-				TargetAimReduction = ShoulderAimSpreadReduction;
-				break;
-			case EAimState::ADS:
-				TargetAimReduction = ADSAimSpreadReduction;
-				break;
-			default:
-				break;
-			}
-			AimSpreadReduction = FMath::FInterpTo(AimSpreadReduction, TargetAimReduction, DeltaTime, SpreadInterpSpeed);
-			Spread -= AimSpreadReduction;
-
-			// Final per-state minimum clamp; ADS is intentionally unclamped
-			switch (Character->GetAimState())
-			{
-			case EAimState::Hipfire:
-				Spread = FMath::Max(Spread, HipfireMinSpread);
-				break;
-			case EAimState::Shoulder:
-				Spread = FMath::Max(Spread, ShoulderMinSpread);
-				break;
-			case EAimState::ADS:
-				break;
-			default:
-				break;
-			}
-			ShootingSpread = FMath::Max(Spread, 0.f);
 			HUDPackage.CrosshairSpread = ShootingSpread;
 
 			HUD->SetHUDPackage(HUDPackage);

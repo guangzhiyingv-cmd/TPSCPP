@@ -3,6 +3,8 @@
 
 #include "HUD/CharacterOverlay.h"
 #include "Components/ProgressBar.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Curves/CurveFloat.h"
 
 void UCharacterOverlay::SetHealthPercent(float Health, float MaxHealth)
@@ -40,6 +42,34 @@ void UCharacterOverlay::SetTimeText(float Seconds)
 	const int32 RemainingSeconds = TotalSeconds % 60;
 	TimeText->SetText(FText::FromString(
 		FString::Printf(TEXT("%02d:%02d"), Minutes, RemainingSeconds)));
+}
+
+void UCharacterOverlay::SetScopeReticle(UTexture2D* ReticleTexture)
+{
+	if (!ScopeReticleImage)
+	{
+		return;
+	}
+
+	if (ReticleTexture)
+	{
+		ScopeReticleImage->SetBrushFromTexture(ReticleTexture);
+		ScopeReticleImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	else
+	{
+		// Collapsed instead of Hidden so the widget takes no space when there is no scope reticle.
+		ScopeReticleImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UCharacterOverlay::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	// The scope reticle visibility is owned by the ADS state, so start hidden no matter what the
+	// designer left on the image.
+	SetScopeReticle(nullptr);
 }
 
 void UCharacterOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)

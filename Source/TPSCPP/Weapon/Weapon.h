@@ -11,6 +11,7 @@
 #include "Weapon.generated.h"
 
 class UAnimInstance;
+class USkeletalMesh;
 
 UENUM(BlueprintType)
 enum class EWeaponState : uint8
@@ -156,6 +157,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	virtual bool ShouldApplyAimSpread() const { return true; }
 
+	/**
+	 * Called with the aim down sights blend progress while the aim presentation plays: 0 = hipfire,
+	 * 1 = fully aimed. Weapons with aim driven visuals (for example a scope lens) override this.
+	 */
+	virtual void SetAimBlend(float Blend) {}
+
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	int32 GetPelletCount() const { return PelletCount; }
 
@@ -214,6 +221,35 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Weapon")
 	float CurrentPelletSpreadAngleDegrees = 0.f;
+
+	/** Spread added per unit of ground speed. Drives the crosshair size and the shot randomization. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float VelocitySpreadMultiplier = 0.1f;
+
+	/** Spread subtracted while shoulder aiming. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float ShoulderAimSpreadReduction = 8.f;
+
+	/** Spread subtracted while aiming down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float ADSAimSpreadReduction = 16.f;
+
+	/** Minimum spread while hip firing. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float HipfireMinSpread = 10.f;
+
+	/** Minimum spread while shoulder aiming. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float ShoulderMinSpread = 5.f;
+
+	/** Extra spread ramped in while airborne. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0))
+	float AirborneSpreadBonus = 20.f;
+
+	/** Interpolation speed of the airborne and aim spread terms. Higher = faster. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spread", meta = (ClampMin = 0.1))
+	float SpreadInterpSpeed = 8.f;
+
 
 	/** Magazine capacity of this weapon. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo", meta = (ClampMin = 1))
@@ -306,4 +342,24 @@ public:
 	class UTexture2D* CrosshairsTop;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Crosshairs")
 	class UTexture2D* CrosshairsBottom;
+
+	/** Skeletal mesh drawn only to CustomDepth while aiming: it marks the scope area the post process magnifies. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scope")
+	TSoftObjectPtr<USkeletalMesh> ScopeMaskMesh;
+
+	/** Socket on the weapon mesh the scope mask attaches to. Empty uses the relative transform alone. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scope")
+	FName ScopeMaskSocket;
+
+	/** Offset of the scope mask from that socket, or from the view model root when no socket is set. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scope")
+	FTransform ScopeMaskRelativeTransform;
+
+	/** CustomDepth stencil value used by the scope mask mesh and the scope post process. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scope", meta = (ClampMin = 0, ClampMax = 255))
+	int32 ScopeMaskStencilBit = 1;
+
+	/** Reticle shown through the scope once the player is fully aimed down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scope")
+	class UTexture2D* ScopeReticleTexture;
 };

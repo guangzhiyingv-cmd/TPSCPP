@@ -35,6 +35,7 @@ AWeapon::AWeapon()
 
 	WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Camera, ECollisionResponse::ECR_Ignore);
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	AreaSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AreaSphere"));
@@ -128,6 +129,13 @@ void AWeapon::ApplyWeaponData(bool bInitializeRuntimeState)
 	PelletCount = FMath::Max(WeaponData.PelletCount, 1);
 	PelletSpreadMaxAngleDegrees = FMath::Max(WeaponData.PelletSpreadMaxAngleDegrees, 0.f);
 	CurrentPelletSpreadAngleDegrees = PelletSpreadMaxAngleDegrees;
+	VelocitySpreadMultiplier = WeaponData.VelocitySpreadMultiplier;
+	ShoulderAimSpreadReduction = WeaponData.ShoulderAimSpreadReduction;
+	ADSAimSpreadReduction = WeaponData.ADSAimSpreadReduction;
+	HipfireMinSpread = WeaponData.HipfireMinSpread;
+	ShoulderMinSpread = WeaponData.ShoulderMinSpread;
+	AirborneSpreadBonus = WeaponData.AirborneSpreadBonus;
+	SpreadInterpSpeed = WeaponData.SpreadInterpSpeed;
 	MagCapacity = FMath::Max(WeaponData.MagCapacity, 1);
 	if (bInitializeRuntimeState || !bWeaponDataInitialized)
 	{
@@ -168,6 +176,16 @@ void AWeapon::ApplyWeaponData(bool bInitializeRuntimeState)
 	CrosshairsBottom = WeaponData.CrosshairsBottom.IsNull()
 		? CrosshairsBottom
 		: LoadSoftObject(WeaponData.CrosshairsBottom);
+
+	ScopeMaskMesh = WeaponData.ScopeMaskMesh.IsNull()
+		? ScopeMaskMesh
+		: LoadSoftObject(WeaponData.ScopeMaskMesh);
+	ScopeMaskSocket = WeaponData.ScopeMaskSocket;
+	ScopeMaskRelativeTransform = WeaponData.ScopeMaskRelativeTransform;
+	ScopeMaskStencilBit = WeaponData.ScopeMaskStencilBit;
+	ScopeReticleTexture = WeaponData.ScopeReticleTexture.IsNull()
+		? ScopeReticleTexture
+		: LoadSoftObject(WeaponData.ScopeReticleTexture);
 }
 
 void AWeapon::SetAreaSphereCollisionEnabled(bool bEnabled)

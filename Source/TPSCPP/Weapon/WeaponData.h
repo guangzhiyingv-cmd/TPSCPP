@@ -71,6 +71,34 @@ struct TPSCPP_API FWeaponData : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon", meta = (ClampMin = 0))
 	float PelletSpreadMaxAngleDegrees = 0.f;
 
+	/** Spread added per unit of ground speed. Drives the crosshair size and the shot randomization. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float VelocitySpreadMultiplier = 0.1f;
+
+	/** Spread subtracted while shoulder aiming. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float ShoulderAimSpreadReduction = 8.f;
+
+	/** Spread subtracted while aiming down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float ADSAimSpreadReduction = 16.f;
+
+	/** Minimum spread while hip firing. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float HipfireMinSpread = 10.f;
+
+	/** Minimum spread while shoulder aiming. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float ShoulderMinSpread = 5.f;
+
+	/** Extra spread ramped in while airborne. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0))
+	float AirborneSpreadBonus = 20.f;
+
+	/** Interpolation speed of the airborne and aim spread terms. Higher = faster. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Spread", meta = (ClampMin = 0.1))
+	float SpreadInterpSpeed = 8.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ammo", meta = (ClampMin = 1))
 	int32 MagCapacity = 30;
 
@@ -148,4 +176,24 @@ struct TPSCPP_API FWeaponData : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Projectile", meta = (ClampMin = 0))
 	float ExplosionRadius = 500.f;
+
+	/** Skeletal mesh drawn only to CustomDepth while aiming: it marks the scope area the post process magnifies. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scope")
+	TSoftObjectPtr<USkeletalMesh> ScopeMaskMesh;
+
+	/** Socket on the weapon mesh the scope mask attaches to. Empty uses the relative transform alone. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scope")
+	FName ScopeMaskSocket;
+
+	/** Offset of the scope mask from that socket, or from the view model root when no socket is set. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scope")
+	FTransform ScopeMaskRelativeTransform;
+
+	/** CustomDepth stencil value used by the scope mask mesh and the scope post process. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scope", meta = (ClampMin = 0, ClampMax = 255))
+	int32 ScopeMaskStencilBit = 1;
+
+	/** Reticle shown through the scope once the player is fully aimed down sights. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Scope")
+	TSoftObjectPtr<UTexture2D> ScopeReticleTexture;
 };

@@ -97,34 +97,6 @@ private:
 
 	void TraceUnderCrosshairs(FHitResult& TraceHitResult, bool bApplyAimSpread = true);
 
-	/** Multiplies character speed to determine crosshair spread. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float VelocitySpreadMultiplier = 0.1f;
-
-	/** Amount subtracted from crosshair spread while shoulder aiming. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float ShoulderAimSpreadReduction = 8.f;
-
-	/** Amount subtracted from crosshair spread while aiming down sights. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float ADSAimSpreadReduction = 16.f;
-
-	/** Minimum crosshair spread while in hipfire state. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float HipfireMinSpread = 10.f;
-
-	/** Minimum crosshair spread while shoulder aiming. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float ShoulderMinSpread = 5.f;
-
-	/** Maximum crosshair spread bonus applied while airborne. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0))
-	float AirborneSpreadBonus = 20.f;
-
-	/** Interpolation speed for the airborne spread bonus. Higher = faster. */
-	UPROPERTY(EditAnywhere, Category = "Crosshairs", meta = (ClampMin = 0.1))
-	float SpreadInterpSpeed = 8.f;
-
 	/** Current airborne spread bonus, interpolated each frame. */
 	float AirborneSpread = 0.f;
 

@@ -19,6 +19,7 @@ class UInputAction;
 class UAnimMontage;
 class UAnimInstance;
 class UMaterialInstanceDynamic;
+class USkeletalMeshComponent;
 class FBoolProperty;
 struct FInputActionValue;
 
@@ -61,6 +62,10 @@ class ATPSCPPCharacter : public ACharacter, public IAbilitySystemInterface
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ViewModelWeapon;
 
+	/** Mask drawn only to CustomDepth while aiming: it marks the scope area the post process magnifies. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* ScopeMask;
+
 protected:
 
 	/** Jump Input Action */
@@ -102,6 +107,10 @@ protected:
 	/** Reload Input Action */
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* ReloadAction;
+
+	/** Character ability Input Action. Optional: assign it in the character blueprint. */
+	UPROPERTY(EditAnywhere, Category="Input")
+	UInputAction* AbilityAction;
 
 public:
 
@@ -356,6 +365,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoReload();
 
+	/**
+	 * Handles the character ability input. Empty by default: subclasses grant and activate their own
+	 * gameplay ability here (C++ overrides DoAbility_Implementation, blueprints implement the event).
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="Input")
+	void DoAbility();
+	virtual void DoAbility_Implementation();
+
 	/** Plays the local ADS weapon recoil animation when firing while aiming. */
 	void PlayADSRecoil(float PlayRate);
 
@@ -504,6 +521,9 @@ protected:
 	UFUNCTION()
 	void ADSRecoilTimelineUpdate(float Value);
 
+	/** Shows or hides the scope reticle on the owning client's HUD. */
+	void UpdateScopeReticleVisibility(bool bShouldShow);
+
 	/** Current aiming state. Hipfire is the base state; Shoulder and ADS cannot switch directly. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category="Combat")
 	EAimState AimState = EAimState::Hipfire;
@@ -515,6 +535,10 @@ protected:
 	/** Mouse/aim look sensitivity multiplier while aiming down sights. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.1, ClampMax = 5.0))
 	float ADSSensitivity = 0.5f;
+
+	/** ADS blend required before the scope reticle shows at all. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (ClampMin = 0.f, ClampMax = 1.f))
+	float ScopeReticleShowBlend = 0.99f;
 
 	/** Fallback reload montage used when the equipped weapon's data row has none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
@@ -541,6 +565,9 @@ protected:
 	/** Set once when the "no reload montage at all" warning was logged for this character. */
 	mutable bool bWarnedNoReloadMontage = false;
 
+	/** The reload montage this character actually started, so a stop targets it and nothing else. */
+	TWeakObjectPtr<UAnimMontage> ActiveReloadMontage;
+
 	/** Clears the local predicted reload once the server's authoritative state arrives or it is refused. */
 	void OnReloadTagChanged(const FGameplayTag Tag, int32 NewCount);
 
@@ -562,6 +589,12 @@ protected:
 	/** Pending ADS camera sequence flag: shoulder animation first, then switch to FPS camera. */
 	UPROPERTY()
 	bool bPendingADS = false;
+
+	/** True while leaving ADS: the FOV stays at the normal value instead of blending with the camera timeline. */
+	bool bInstantFOVRecovery = false;
+
+	/** True once the scope reticle has been shown, so repeated shows do not touch the widget. */
+	bool bScopeReticleVisible = false;
 
 private:
 

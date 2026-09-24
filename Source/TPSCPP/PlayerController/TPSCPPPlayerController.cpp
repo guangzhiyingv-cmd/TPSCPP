@@ -303,3 +303,12 @@ void ATPSCPPPlayerController::SetAmmoHUD(int32 Ammo, int32 ReserveAmmo)
 		PlayerHUD->CharacterOverlay->ReloadAmount->SetText(FText::FromString(FString::FromInt( ReserveAmmo)));
 	}
 }
+
+void ATPSCPPPlayerController::SetScopeReticleHUD(UTexture2D* ReticleTexture)
+{
+	PlayerHUD = PlayerHUD == nullptr ? Cast<APlayerHUD>(GetHUD()) : PlayerHUD;
+	if (PlayerHUD && PlayerHUD->CharacterOverlay)
+	{
+		PlayerHUD->CharacterOverlay->SetScopeReticle(ReticleTexture);
+	}
+}

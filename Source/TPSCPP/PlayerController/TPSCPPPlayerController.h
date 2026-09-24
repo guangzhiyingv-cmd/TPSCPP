@@ -19,6 +19,10 @@ public:
 	void SetScoreHUD(float Score);
 	void SetDefeatsHUD(int32 Defeats);
 	void SetAmmoHUD(int32 Ammo, int32 ReserveAmmo);
+
+	/** Shows the scope reticle on the character overlay, or hides it when null. */
+	void SetScopeReticleHUD(class UTexture2D* ReticleTexture);
+
 	float GetServerTime() const;
 	void SetTimeHUD(float Time);
 	void ShowWarmupHUD(bool bShow);

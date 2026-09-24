@@ -4,6 +4,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
@@ -91,6 +92,17 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	ViewModelWeapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ViewModelWeapon->SetCastShadow(false);
 	ViewModelWeapon->SetVisibility(false);
+
+	// The scope mask is only drawn to CustomDepth, where the scope post process reads it.
+	ScopeMask = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ScopeMask"));
+	ScopeMask->SetupAttachment(ViewModelWeapon);
+	ScopeMask->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ScopeMask->SetCastShadow(false);
+	ScopeMask->SetRenderInMainPass(false);
+	ScopeMask->SetRenderInDepthPass(false);
+	ScopeMask->SetRenderCustomDepth(true);
+	ScopeMask->SetCustomDepthStencilValue(1);
+	ScopeMask->SetVisibility(false);
 
 	// Ignore camera channel on all character collision components to prevent camera clipping
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -412,6 +424,12 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 		// Reloading
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoReload);
+
+		// Character ability (optional: a subclass provides the input asset and the ability)
+		if (AbilityAction)
+		{
+			EnhancedInputComponent->BindAction(AbilityAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoAbility);
+		}
 	}
 	else
 	{
@@ -695,6 +713,7 @@ void ATPSCPPCharacter::SyncAimStateTags()
 
 	AimState = EAimState::Shoulder;
 	SyncAimStateTags();
+	bInstantFOVRecovery = false;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
@@ -751,6 +770,7 @@ void ATPSCPPCharacter::DoADSStart()
 	AimState = EAimState::ADS;
 	SyncAimStateTags();
 	bPendingADS = true;
+	bInstantFOVRecovery = false;
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bUseControllerDesiredRotation = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
@@ -804,6 +824,11 @@ void ATPSCPPCharacter::DoReload()
 	{
 		TryReload();
 	}
+}
+
+void ATPSCPPCharacter::DoAbility_Implementation()
+{
+	// Intentionally empty: subclasses activate their own gameplay ability here.
 }
 
 void ATPSCPPCharacter::TryReload()
@@ -896,19 +921,18 @@ void ATPSCPPCharacter::PlayReloadMontage(bool bPlay, float ReloadTime)
 	{
 		const float PlayRate = MontageToPlay->GetSectionLength(0) / FMath::Max(ReloadTime, 0.01f);
 		MeshAnimInstance->Montage_Play(MontageToPlay, PlayRate);
+		ActiveReloadMontage = MontageToPlay;
 	}
 	else
 	{
 		// Switching weapons cancels the reload, so the equipped weapon (and therefore the resolved
-		// montage) may already have changed: stop whatever is running instead of only the resolved one.
-		if (MeshAnimInstance->Montage_IsPlaying(MontageToPlay))
+		// montage) may already have changed: stop the montage this character actually started instead
+		// of every montage on the mesh.
+		if (UAnimMontage* StartedMontage = ActiveReloadMontage.Get())
 		{
-			MeshAnimInstance->Montage_Stop(0.1f, MontageToPlay);
+			MeshAnimInstance->Montage_Stop(0.1f, StartedMontage);
 		}
-		else
-		{
-			MeshAnimInstance->Montage_Stop(0.1f);
-		}
+		ActiveReloadMontage = nullptr;
 	}
 }
 
@@ -998,6 +1022,9 @@ void ATPSCPPCharacter::DoADSEnd()
 		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 		{
 			Weapon->WeaponMesh->SetVisibility(true);
+
+			// Leaving ADS resets aim driven visuals, for example the scope lens back to opaque.
+			Weapon->SetAimBlend(0.f);
 		}
 
 		if (ViewModelWeapon)
@@ -1005,12 +1032,25 @@ void ATPSCPPCharacter::DoADSEnd()
 			ViewModelWeapon->SetVisibility(false);
 		}
 
+		if (ScopeMask)
+		{
+			ScopeMask->SetVisibility(false);
+		}
+
+		// Leaving ADS always hides the scope reticle.
+		UpdateScopeReticleVisibility(false);
+
 		ADSTimeline->Stop();
 
 		if (ADSRecoilTimeline)
 		{
 			ADSRecoilTimeline->Stop();
 		}
+
+		// Leaving ADS restores the normal FOV immediately; only the arm length and socket offset
+		// blend back, so the reverse timeline must not blend the FOV.
+		bInstantFOVRecovery = true;
+		FollowCamera->SetFieldOfView(NormalFOV);
 
 		CameraTimeline->SetPlayRate(2.f);
 		CameraTimeline->Reverse();
@@ -1038,16 +1078,15 @@ void ATPSCPPCharacter::CameraTimelineUpdate(float Value)
 	CameraBoom->TargetArmLength = FMath::Lerp(NormalArmLength, AimingArmLength, Value);
 	CameraBoom->SocketOffset = FMath::Lerp(NormalSocketOffset, AimingSocketOffset, Value);
 
-	// ADS uses the equipped weapon's FOV, otherwise fall back to the character aim FOV
-	float TargetFOV = AimingFOV;
-	if (AimState == EAimState::ADS)
+	// Leaving ADS snaps the FOV back, so the reverse transition keeps it at the normal value.
+	if (bInstantFOVRecovery)
 	{
-		if (AWeapon* Weapon = Combat->GetEquippedWeapon())
-		{
-			TargetFOV = Weapon->ADSFOV;
-		}
+		FollowCamera->SetFieldOfView(NormalFOV);
+		return;
 	}
-	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, TargetFOV, Value));
+
+	// The camera timeline only blends to the shoulder FOV; the ADS zoom is driven by ADSTimeline.
+	FollowCamera->SetFieldOfView(FMath::Lerp(NormalFOV, AimingFOV, Value));
 }
 
 void ATPSCPPCharacter::CameraTimelineFinished()
@@ -1069,9 +1108,44 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 			if (ViewModelWeapon)
 			{
 				ViewModelWeapon->SetSkeletalMeshAsset(Weapon->WeaponMesh->GetSkeletalMeshAsset());
+
+				// Share the weapon's material instances, so aim driven visuals such as the scope lens
+				// dynamic instance drive the view model too.
+				const int32 NumMaterials = ViewModelWeapon->GetNumMaterials();
+				for (int32 MaterialIndex = 0; MaterialIndex < NumMaterials; ++MaterialIndex)
+				{
+					ViewModelWeapon->SetMaterial(MaterialIndex, Weapon->WeaponMesh->GetMaterial(MaterialIndex));
+				}
+
 				ViewModelWeapon->SetRelativeLocation(FPSWeaponStartLocation);
 				ViewModelWeapon->SetRelativeRotation(FPSWeaponRelativeRotation);
 				ViewModelWeapon->SetVisibility(true);
+			}
+
+			// The first-person camera takes over at the shoulder FOV; the ADS timeline then blends it
+			// down to the weapon's ADS FOV so the zoom matches the view model raise.
+			FPS_Camera->SetFieldOfView(AimingFOV);
+
+			// Scope mask: drawn only to CustomDepth, so the post process knows where the scope is.
+			if (ScopeMask)
+			{
+				USkeletalMesh* MaskMesh = Weapon->ScopeMaskMesh.LoadSynchronous();
+				ScopeMask->SetSkeletalMeshAsset(MaskMesh);
+				ScopeMask->SetCustomDepthStencilValue(Weapon->ScopeMaskStencilBit);
+				ScopeMask->AttachToComponent(
+					ViewModelWeapon,
+					FAttachmentTransformRules::SnapToTargetNotIncludingScale,
+					Weapon->ScopeMaskSocket);
+				ScopeMask->SetRelativeTransform(Weapon->ScopeMaskRelativeTransform);
+
+				// A mask on the same skeleton follows the view model pose, so it stays glued to the scope.
+				const USkeletalMesh* ViewModelMeshAsset = ViewModelWeapon->GetSkeletalMeshAsset();
+				ScopeMask->SetLeaderPoseComponent(
+					(MaskMesh && ViewModelMeshAsset && MaskMesh->GetSkeleton() == ViewModelMeshAsset->GetSkeleton())
+						? ViewModelWeapon
+						: nullptr);
+
+				ScopeMask->SetVisibility(!Weapon->ScopeMaskMesh.IsNull());
 			}
 
 			ADSTimeline->SetPlayRate(Weapon->ADSTimelinePlayRate);
@@ -1082,12 +1156,50 @@ void ATPSCPPCharacter::CameraTimelineFinished()
 
 void ATPSCPPCharacter::ADSWeaponTimelineUpdate(float Value)
 {
-	if (!ViewModelWeapon || !Combat) return;
+	if (!Combat) return;
 
 	if (AWeapon* Weapon = Combat->GetEquippedWeapon())
 	{
-		ViewModelWeapon->SetRelativeLocation(
-			FMath::Lerp(FPSWeaponStartLocation, Weapon->FPSWeaponRelativeLocation, Value));
+		if (ViewModelWeapon)
+		{
+			ViewModelWeapon->SetRelativeLocation(
+				FMath::Lerp(FPSWeaponStartLocation, Weapon->FPSWeaponRelativeLocation, Value));
+		}
+
+		// The ADS zoom shares the timeline progress with the view model raise.
+		FPS_Camera->SetFieldOfView(FMath::Lerp(AimingFOV, Weapon->ADSFOV, Value));
+
+		// Weapons with aim driven visuals (for example a scope lens) share the same progress.
+		Weapon->SetAimBlend(Value);
+
+		// The scope reticle is a hard gate: it only appears once the player is fully aimed.
+		UpdateScopeReticleVisibility(Value >= ScopeReticleShowBlend);
+	}
+}
+
+void ATPSCPPCharacter::UpdateScopeReticleVisibility(bool bShouldShow)
+{
+	// Only redundant shows are skipped: a hide always goes through, so a stale cache can never keep
+	// the reticle on screen.
+	if (bShouldShow && bScopeReticleVisible)
+	{
+		return;
+	}
+	bScopeReticleVisible = bShouldShow;
+
+	UTexture2D* ReticleTexture = nullptr;
+	if (bShouldShow && Combat)
+	{
+		if (const AWeapon* Weapon = Combat->GetEquippedWeapon())
+		{
+			ReticleTexture = Weapon->ScopeReticleTexture;
+		}
+	}
+
+	PlayerController = PlayerController == nullptr ? Cast<ATPSCPPPlayerController>(GetController()) : PlayerController;
+	if (PlayerController)
+	{
+		PlayerController->SetScopeReticleHUD(ReticleTexture);
 	}
 }
 
