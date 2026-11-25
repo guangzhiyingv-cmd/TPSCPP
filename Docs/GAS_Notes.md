@@ -1,7 +1,15 @@
 # GAS 迁移笔记（TPSCPP）
 
 本文件记录将项目迁移到 Gameplay Ability System（UE 5.8）过程中实际踩过的坑与已验证的做法。
-新增 GAS 相关功能前请先读一遍，避免重复踩坑。
+当前实现从[伤害、复制与命中特效](Combat/Damage.md)进入。排查具体问题时可直接打开对应记录：
+
+| 观察到的问题 | 查阅章节 |
+| --- | --- |
+| Cue 没有注册、弹着点缺失或特效重复 | [GameplayCue](#1-gameplaycue) |
+| 能力激活、Cost 或取消与预期不符 | [GameplayAbility](#2-gameplayability) |
+| 冷却标签或 SetByCaller 时长未生效 | [GameplayEffect](#3-gameplayeffect) |
+| 投射物在一帧内生成并销毁 | [网络](#4-网络) |
+| 重现高延迟、丢包或检查预测行为 | [工程与工具链](#5-工程--工具链) · [预测记录](#6-预测阶段-b-记录) |
 
 参考实现：`E:\Unreal Projects\LyraStarterGame\Source\LyraGame`（Lyra），
 引擎源码：`E:\UE5.8\UE_5.8\Engine\Plugins\Runtime\GameplayAbilities\Source\GameplayAbilities`。

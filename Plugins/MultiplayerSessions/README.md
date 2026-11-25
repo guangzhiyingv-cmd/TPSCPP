@@ -2,6 +2,8 @@
 
 A UE5 plugin that wraps the Online Subsystem session API into a reusable, event-driven pattern. Handles session creation, discovery, joining, and destruction with automatic retry on join failure.
 
+For the hosting and joining flow in TPSCPP, see [session integration](../../Docs/Multiplayer/Sessions.md). For plugin integration, start with [menu setup](#how-to-use) or the [API reference](#api-reference).
+
 ---
 
 ## Overview
@@ -25,17 +27,16 @@ Make sure MultiplayerSessions is enabled in your project .uproject Plugins list.
 
 ### 2. Create and show the menu widget
 
-`cpp
+```cpp
 UMenu* Menu = CreateWidget<UMenu>(GetWorld(), MenuClass);
-Menu->SetLobbyMapPath(TEXT("/Game/Maps/MyLobby"));
 Menu->MenuSetup(4, TEXT("FreeForAll"));
-`
+```
 
 MenuSetup can also take the lobby path directly:
 
-`cpp
+```cpp
 Menu->MenuSetup(4, TEXT("FreeForAll"), TEXT("/Game/Maps/MyLobby"));
-`
+```
 
 ### 3. Done
 
@@ -89,7 +90,7 @@ CreateSession applies these settings automatically: bIsLANMatch auto-detected (t
 
 ## Dependencies
 
-OnlineSubsystem (public), OnlineSubsystemSteam (public), UMG (public), Slate/SlateCore (public via UMG). The uplugin file declares OnlineSubsystem and OnlineSubsystemSteam as plugin-level dependencies.
+The runtime module depends on OnlineSubsystem, OnlineSubsystemSteam, SteamSockets, UMG, Slate and SlateCore. The plugin descriptor enables OnlineSubsystem, OnlineSubsystemSteam and SteamSockets. [Module dependencies](Source/MultiplayerSessions/MultiplayerSessions.Build.cs) · [Plugin descriptor](MultiplayerSessions.uplugin)
 
 ---
 
