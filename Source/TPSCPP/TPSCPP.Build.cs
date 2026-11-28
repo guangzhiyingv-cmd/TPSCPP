@@ -27,7 +27,7 @@ public class TPSCPP : ModuleRules
 			"GameplayTasks"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.Add("AnimationCore");
 
 		PublicIncludePaths.AddRange(new string[] {
 			"TPSCPP",

@@ -3,10 +3,20 @@
 #include "Animation/TPSCPPAnimInstance.h"
 #include "AbilitySystem/TPSCPPGameplayTags.h"
 #include "AbilitySystemComponent.h"
+#include "Character/TPSCPPCharacter.h"
 
 UTPSCPPAnimInstance::UTPSCPPAnimInstance()
 {
 	AddDefaultMappings();
+}
+
+void UTPSCPPAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
+{
+	Super::NativeUpdateAnimation(DeltaSeconds);
+
+	const ATPSCPPCharacter* Character = Cast<ATPSCPPCharacter>(TryGetPawnOwner());
+	bUseThirdPersonAimPose = Character && Character->IsAiming();
+	UpdateTurnaround(Character, DeltaSeconds);
 }
 
 void UTPSCPPAnimInstance::AddDefaultMappings()

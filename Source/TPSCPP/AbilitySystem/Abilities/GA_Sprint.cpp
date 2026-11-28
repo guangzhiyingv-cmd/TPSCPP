@@ -63,25 +63,13 @@ void UGA_Sprint::ApplySprintMovement(bool bSprinting)
 
 	if (bSprinting)
 	{
-		Character->bUseControllerRotationYaw = false;
-		Movement->bUseControllerDesiredRotation = false;
-		Movement->bOrientRotationToMovement = true;
+		Character->SetMovementFacing(true);
 		Movement->MaxWalkSpeed = Character->GetSprintSpeed();
 		return;
 	}
 
 	// Back to the armed stance when a weapon is equipped, otherwise to movement orientation.
-	if (Character->HasEquippedWeapon())
-	{
-		Character->bUseControllerRotationYaw = false;
-		Movement->bUseControllerDesiredRotation = true;
-		Movement->bOrientRotationToMovement = false;
-	}
-	else
-	{
-		Movement->bUseControllerDesiredRotation = false;
-		Movement->bOrientRotationToMovement = true;
-	}
+	Character->SetMovementFacing(!Character->HasEquippedWeapon());
 
 	Movement->MaxWalkSpeed = Character->GetWalkSpeed();
 }

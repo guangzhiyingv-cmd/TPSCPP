@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "AbilitySystem/TPSCPPNativeGameplayCues.h"
+#include "AbilitySystem/GameplayCues/TPSCPPCueNotify_Landing.h"
 #include "AbilitySystem/GameplayCues/TPSCPPCueNotify_Blood.h"
 #include "AbilitySystem/GameplayCues/TPSCPPCueNotify_Impact.h"
 #include "AbilitySystem/TPSCPPGameplayTags.h"
@@ -19,6 +20,7 @@ void TPSCPPNativeGameplayCues::AddToCueSet(UGameplayCueSet& CueSet)
 {
 	const FNativeGameplayCue NativeCues[] =
 	{
+		{ TPSCPPGameplayTags::Cue_Character_Landing, UTPSCPPCueNotify_Landing::StaticClass() },
 		{ TPSCPPGameplayTags::Cue_Hit_Blood, UTPSCPPCueNotify_Blood::StaticClass() },
 		{ TPSCPPGameplayTags::Cue_Weapon_Impact, UTPSCPPCueNotify_Impact::StaticClass() },
 	};

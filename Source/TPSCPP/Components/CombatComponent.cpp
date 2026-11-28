@@ -25,7 +25,11 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	SetHUDCrosshairs(DeltaTime);
+	if (Character && Character->IsLocallyControlled() && EquippedWeapon)
+	{
+		UpdateSpread(DeltaTime);
+	}
+	SetHUDCrosshairs();
 }
 
 
@@ -106,10 +110,8 @@ void UCombatComponent::EquipWeapon(AWeapon* WeaponToEquip)
 
 	SetOverlappingWeapon(nullptr);
 
-	// Use camera-relative rotation when weapon is equipped
-	Character->bUseControllerRotationYaw = false;
-	Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
-	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+	// Keep movement-facing when picking up a weapon during a sprint.
+	Character->SetMovementFacing(Character->IsSprinting());
 	Character->bIsEquipped = true;
 	Character->LinkAnimLayer(EquippedWeapon->GetAnimLayer());
 	UpdateAmmoHUD();
@@ -157,9 +159,7 @@ void UCombatComponent::OnRep_EquippedWeapon()
 			CustomMesh,
 			FAttachmentTransformRules::SnapToTargetNotIncludingScale,
 			TEXT("hand_rSocket"));
-		Character->bUseControllerRotationYaw = false;
-		Character->GetCharacterMovement()->bUseControllerDesiredRotation = true;
-		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+		Character->SetMovementFacing(Character->IsSprinting());
 		Character->LinkAnimLayer(EquippedWeapon->GetAnimLayer());
 		UpdateAmmoHUD();
 	}
@@ -287,6 +287,8 @@ void UCombatComponent::ServerFire_Implementation(bool bPressed, const FVector_Ne
 	// casing, recoil, projectile) only when the server accepted it.
 	if (Character && Character->TryFireWeapon())
 	{
+		UE_LOG(LogTPSCPP, VeryVerbose, TEXT("Shot accepted: aim=%s ammo=%d"),
+			*UEnum::GetValueAsString(Character->GetAimState()), EquippedWeapon->Ammo);
 		MulticastFire(true, InHitTarget);
 	}
 }
@@ -335,7 +337,10 @@ void UCombatComponent::TraceUnderCrosshairs(
 	
 	if (bApplyAimSpread)
 	{
-		CrosshairLocation += FMath::RandPointInCircle(ShootingSpread);
+		const float Spread = CalculateShootingSpread();
+		CrosshairLocation += FMath::RandPointInCircle(Spread);
+		UE_LOG(LogTPSCPP, VeryVerbose, TEXT("Shot trace: aim=%s spread=%.3f px"),
+			*UEnum::GetValueAsString(Character->GetAimState()), Spread);
 	}
 	
 	bool bScreenToWorld = UGameplayStatics::DeprojectScreenToWorld(
@@ -401,7 +406,54 @@ void UCombatComponent::TraceUnderCrosshairs(
 
 
 
-void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
+void UCombatComponent::UpdateSpread(float DeltaTime)
+{
+	// Airborne spread: smoothly ramp to the bonus while in the air and recover to 0 after landing
+	const float AirborneTarget = Character->GetCharacterMovement()->IsMovingOnGround()
+		? 0.f
+		: EquippedWeapon->AirborneSpreadBonus;
+	AirborneSpread = FMath::FInterpTo(
+		AirborneSpread,
+		AirborneTarget,
+		DeltaTime,
+		EquippedWeapon->SpreadInterpSpeed);
+
+	// Aim reduction: interpolate toward the target reduction for the current aim state
+	float TargetAimReduction = 0.f;
+	switch (Character->GetAimState())
+	{
+	case EAimState::Shoulder:
+		TargetAimReduction = EquippedWeapon->ShoulderAimSpreadReduction;
+		break;
+	case EAimState::ADS:
+		TargetAimReduction = EquippedWeapon->ADSAimSpreadReduction;
+		break;
+	default:
+		break;
+	}
+	AimSpreadReduction = FMath::FInterpTo(
+		AimSpreadReduction,
+		TargetAimReduction,
+		DeltaTime,
+		EquippedWeapon->SpreadInterpSpeed);
+}
+
+float UCombatComponent::CalculateShootingSpread() const
+{
+	const float Spread = Character->GetVelocity().Size2D() * EquippedWeapon->VelocitySpreadMultiplier
+		+ AirborneSpread - AimSpreadReduction;
+	switch (Character->GetAimState())
+	{
+	case EAimState::Hipfire:
+		return FMath::Max3(Spread, EquippedWeapon->HipfireMinSpread, 0.f);
+	case EAimState::Shoulder:
+		return FMath::Max3(Spread, EquippedWeapon->ShoulderMinSpread, 0.f);
+	default:
+		return FMath::Max(Spread, 0.f);
+	}
+}
+
+void UCombatComponent::SetHUDCrosshairs()
 {
 	if (Character == nullptr || Character->Controller == nullptr) return;
 
@@ -429,68 +481,7 @@ void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
 				HUDPackage.CrosshairBottom = nullptr;
 			}
 
-			// Spread parameters live on the equipped weapon, so every weapon tunes its own feel.
-			if (EquippedWeapon)
-			{
-				// Crosshair spread grows with movement speed and narrows while aiming
-				// Ground speed (ignore Z axis) so slopes and vertical movement do not widen the crosshair
-				FVector CharacterVelocity = Character->GetVelocity();
-				CharacterVelocity.Z = 0.f;
-				float Spread = CharacterVelocity.Size() * EquippedWeapon->VelocitySpreadMultiplier;
-
-				// Airborne spread: smoothly ramp to the bonus while in the air and recover to 0 after landing
-				const float AirborneTarget = Character->GetCharacterMovement()->IsMovingOnGround()
-					? 0.f
-					: EquippedWeapon->AirborneSpreadBonus;
-				AirborneSpread = FMath::FInterpTo(
-					AirborneSpread,
-					AirborneTarget,
-					DeltaTime,
-					EquippedWeapon->SpreadInterpSpeed);
-				Spread += AirborneSpread;
-
-				// Aim reduction: interpolate toward the target reduction for the current aim state
-				float TargetAimReduction = 0.f;
-				switch (Character->GetAimState())
-				{
-				case EAimState::Shoulder:
-					TargetAimReduction = EquippedWeapon->ShoulderAimSpreadReduction;
-					break;
-				case EAimState::ADS:
-					TargetAimReduction = EquippedWeapon->ADSAimSpreadReduction;
-					break;
-				default:
-					break;
-				}
-				AimSpreadReduction = FMath::FInterpTo(
-					AimSpreadReduction,
-					TargetAimReduction,
-					DeltaTime,
-					EquippedWeapon->SpreadInterpSpeed);
-				Spread -= AimSpreadReduction;
-
-				// Final per-state minimum clamp; ADS is intentionally unclamped
-				switch (Character->GetAimState())
-				{
-				case EAimState::Hipfire:
-					Spread = FMath::Max(Spread, EquippedWeapon->HipfireMinSpread);
-					break;
-				case EAimState::Shoulder:
-					Spread = FMath::Max(Spread, EquippedWeapon->ShoulderMinSpread);
-					break;
-				case EAimState::ADS:
-					break;
-				default:
-					break;
-				}
-				ShootingSpread = FMath::Max(Spread, 0.f);
-			}
-			else
-			{
-				// Without a weapon there is no crosshair and no shot, so the spread is meaningless.
-				ShootingSpread = 0.f;
-			}
-			HUDPackage.CrosshairSpread = ShootingSpread;
+			HUDPackage.CrosshairSpread = EquippedWeapon ? CalculateShootingSpread() : 0.f;
 
 			HUD->SetHUDPackage(HUDPackage);
 		}

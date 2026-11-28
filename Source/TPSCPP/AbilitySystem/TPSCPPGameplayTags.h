@@ -39,6 +39,8 @@ namespace TPSCPPGameplayTags
 	/** Identity tag of the sprint ability, used for cancellation. */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Sprint);
 
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Character_Landing);
+
 	/** Gameplay cue: projectile impact against surfaces. */
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cue_Weapon_Impact);
 

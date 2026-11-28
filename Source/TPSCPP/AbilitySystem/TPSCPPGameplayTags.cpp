@@ -15,6 +15,7 @@ namespace TPSCPPGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(State_ShoulderAim, "State.ShoulderAim");
 	UE_DEFINE_GAMEPLAY_TAG(State_Firing, "State.Firing");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Sprint, "Ability.Sprint");
+	UE_DEFINE_GAMEPLAY_TAG(Cue_Character_Landing, "Cue.Character.Landing");
 	UE_DEFINE_GAMEPLAY_TAG(Cue_Weapon_Impact, "Cue.Weapon.Impact");
 	UE_DEFINE_GAMEPLAY_TAG(Cue_Hit_Blood, "Cue.Hit.Blood");
 }

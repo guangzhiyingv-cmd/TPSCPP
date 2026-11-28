@@ -1,8 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "TPSCPPCharacter.h"
+#include "Character/TPSCharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/LedgePresentationComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -36,7 +38,8 @@
 #include "GameplayAbilitySpec.h"
 #include "GameplayEffectTypes.h"
 
-ATPSCPPCharacter::ATPSCPPCharacter()
+ATPSCPPCharacter::ATPSCPPCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UTPSCharacterMovementComponent>(CharacterMovementComponentName))
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -66,6 +69,7 @@ ATPSCPPCharacter::ATPSCPPCharacter()
 	CameraBoom->SocketOffset = NormalSocketOffset;
 	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->bDoCollisionTest = true;
+	CreateDefaultSubobject<ULedgePresentationComponent>(TEXT("LedgePresentation"));
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -411,16 +415,18 @@ void ATPSCPPCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoSprintStart);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoSprintEnd);
 
-		// Shoulder aiming
-		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoShoulderAimStart);
-		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoShoulderAimEnd);
-
-		// ADS toggle
-		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoADSToggle);
+		// Tap commits ADS on release before a canceled Hold cleans up shoulder aim.
+		EnhancedInputComponent->BindAction(ADSAction, ETriggerEvent::Triggered, this, &ATPSCPPCharacter::DoADSToggle);
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Triggered, this, &ATPSCPPCharacter::HandleShoulderHold);
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::EndShoulderHold);
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Canceled, this, &ATPSCPPCharacter::EndShoulderHold);
 
 		// Firing
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoFirePressed);
 		EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Completed, this, &ATPSCPPCharacter::DoFireReleased);
+
+		// Enhanced Input runs Started bindings in reverse registration order. Aim precedes a same-frame shot.
+		EnhancedInputComponent->BindAction(ShoulderAimAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoShoulderAimStart);
 
 		// Reloading
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ATPSCPPCharacter::DoReload);
@@ -565,7 +571,7 @@ bool ATPSCPPCharacter::IsAiming() const
 void ATPSCPPCharacter::GetLeftHandSocketData(
 	FTransform& OutRelativeTransform,
 	FVector& OutXAxis,
-	FVector& OutZAxis) const
+	FVector& OutZAxis, bool bInAttachmentBoneSpace) const
 {
 	OutRelativeTransform = FTransform::Identity;
 	OutXAxis = FVector::ZeroVector;
@@ -583,13 +589,24 @@ void ATPSCPPCharacter::GetLeftHandSocketData(
 		return;
 	}
 
-	const FTransform SocketWorld = Weapon->WeaponMesh->GetSocketTransform(TEXT("LeftHandSocket"), RTS_World);
-	const FTransform CustomMeshWorld = CustomMeshComponent->GetComponentTransform();
-
-	OutRelativeTransform = SocketWorld.GetRelativeTransform(CustomMeshWorld);
-
-	OutXAxis = CustomMeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisX()).GetSafeNormal();
-	OutZAxis = CustomMeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisZ()).GetSafeNormal();
+	const USkeletalMeshComponent* WeaponMesh = Weapon->WeaponMesh;
+	if (bInAttachmentBoneSpace)
+	{
+		// Compose the attachment chain without sampling the character's previously evaluated wrist.
+		OutRelativeTransform = WeaponMesh->GetSocketTransform(TEXT("LeftHandSocket"), RTS_Component)
+			* WeaponMesh->GetRelativeTransform()
+			* CustomMeshComponent->GetSocketTransform(WeaponMesh->GetAttachSocketName(), RTS_ParentBoneSpace);
+		OutXAxis = OutRelativeTransform.GetRotation().GetAxisX();
+		OutZAxis = OutRelativeTransform.GetRotation().GetAxisZ();
+	}
+	else
+	{
+		const FTransform SocketWorld = WeaponMesh->GetSocketTransform(TEXT("LeftHandSocket"), RTS_World);
+		const FTransform MeshWorld = CustomMeshComponent->GetComponentTransform();
+		OutRelativeTransform = SocketWorld.GetRelativeTransform(MeshWorld);
+		OutXAxis = MeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisX()).GetSafeNormal();
+		OutZAxis = MeshWorld.InverseTransformVector(SocketWorld.GetRotation().GetAxisZ()).GetSafeNormal();
+	}
 }
 
 float ATPSCPPCharacter::GetAimPitch() const
@@ -617,9 +634,7 @@ void ATPSCPPCharacter::DoSprintStart()
 
 	bIsSprinting = true;
 	SetStateTag(TPSCPPGameplayTags::State_Sprint, true);
-	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->bUseControllerDesiredRotation = false;
-	GetCharacterMovement()->bOrientRotationToMovement = true;
+	SetMovementFacing(true);
 	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
 }
 
@@ -631,17 +646,7 @@ void ATPSCPPCharacter::DoSprintEnd()
 	SetStateTag(TPSCPPGameplayTags::State_Sprint, false);
 	StopSprintAbility();
 
-	if (HasEquippedWeapon())
-	{
-		bUseControllerRotationYaw = false;
-		GetCharacterMovement()->bUseControllerDesiredRotation = true;
-		GetCharacterMovement()->bOrientRotationToMovement = false;
-	}
-	else
-	{
-		GetCharacterMovement()->bUseControllerDesiredRotation = false;
-		GetCharacterMovement()->bOrientRotationToMovement = true;
-	}
+	SetMovementFacing(!HasEquippedWeapon());
 
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
@@ -683,6 +688,23 @@ bool ATPSCPPCharacter::Server_StopSprint_Validate()
 	return true;
 }
 
+void ATPSCPPCharacter::SetMovementFacing(bool bEnable)
+{
+	// Simulated proxies get the authoritative mode independently of equipment and tag notification order.
+	if (GetLocalRole() != ROLE_SimulatedProxy)
+	{
+		bMovementFacing = bEnable;
+		OnRep_MovementFacing();
+	}
+}
+
+void ATPSCPPCharacter::OnRep_MovementFacing()
+{
+	bUseControllerRotationYaw = false;
+	GetCharacterMovement()->bUseControllerDesiredRotation = !bMovementFacing;
+	GetCharacterMovement()->bOrientRotationToMovement = bMovementFacing;
+}
+
 bool ATPSCPPCharacter::IsSprinting() const
 {
 	if (bIsSprinting)
@@ -703,7 +725,7 @@ void ATPSCPPCharacter::SyncAimStateTags()
  
 	void ATPSCPPCharacter::DoShoulderAimStart()
 {
-	if (AimState != EAimState::Hipfire || !HasEquippedWeapon())
+	if (AimState != EAimState::Hipfire || !HasEquippedWeapon() || bEliminated)
 	{
 		return;
 	}
@@ -712,11 +734,10 @@ void ATPSCPPCharacter::SyncAimStateTags()
 	DoSprintEnd();
 
 	AimState = EAimState::Shoulder;
+	Combat->AimSpreadReduction = Combat->GetEquippedWeapon()->ShoulderAimSpreadReduction;
 	SyncAimStateTags();
 	bInstantFOVRecovery = false;
-	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->bUseControllerDesiredRotation = true;
-	GetCharacterMovement()->bOrientRotationToMovement = false;
+	SetMovementFacing(false);
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
 	CameraTimeline->SetPlayRate(1.f);
 	CameraTimeline->Play();
@@ -747,9 +768,7 @@ void ATPSCPPCharacter::DoShoulderAimEnd()
 	}
 	else
 	{
-		bUseControllerRotationYaw = false;
-		GetCharacterMovement()->bUseControllerDesiredRotation = false;
-		GetCharacterMovement()->bOrientRotationToMovement = true;
+		SetMovementFacing(true);
 		if (!HasAuthority())
 		{
 			Server_SetAimState(EAimState::Hipfire);
@@ -759,7 +778,7 @@ void ATPSCPPCharacter::DoShoulderAimEnd()
 
 void ATPSCPPCharacter::DoADSStart()
 {
-	if (AimState != EAimState::Hipfire || !HasEquippedWeapon() || IsReloading())
+	if (AimState == EAimState::ADS || !HasEquippedWeapon() || IsReloading() || bEliminated)
 	{
 		return;
 	}
@@ -771,13 +790,11 @@ void ATPSCPPCharacter::DoADSStart()
 	SyncAimStateTags();
 	bPendingADS = true;
 	bInstantFOVRecovery = false;
-	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->bUseControllerDesiredRotation = true;
-	GetCharacterMovement()->bOrientRotationToMovement = false;
+	SetMovementFacing(false);
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
 
 	CameraTimeline->SetPlayRate(2.f);
-	CameraTimeline->PlayFromStart();
+	CameraTimeline->Play();
 
 	if (!HasAuthority())
 	{
@@ -1062,9 +1079,7 @@ void ATPSCPPCharacter::DoADSEnd()
 	}
 	else
 	{
-		bUseControllerRotationYaw = false;
-		GetCharacterMovement()->bUseControllerDesiredRotation = false;
-		GetCharacterMovement()->bOrientRotationToMovement = true;
+		SetMovementFacing(true);
 	}
 
 	if (!HasAuthority())
@@ -1315,7 +1330,9 @@ void ATPSCPPCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_None);
+	// The owner drives its aim transition locally. An older shoulder update must not rewind a tap into ADS.
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, AimState, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bMovementFacing, COND_SimulatedOnly);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, bIsEquipped, COND_None);
 	DOREPLIFETIME_CONDITION(ATPSCPPCharacter, ReserveAmmo, COND_OwnerOnly);
 }
@@ -1324,7 +1341,7 @@ void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 {
 	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
 	{
-		if (AimState != EAimState::Hipfire)
+		if (AimState != EAimState::Hipfire && !(AimState == EAimState::Shoulder && NewState == EAimState::ADS))
 		{
 			return;
 		}
@@ -1336,8 +1353,7 @@ void ATPSCPPCharacter::Server_SetAimState_Implementation(EAimState NewState)
 	if (NewState == EAimState::Shoulder || NewState == EAimState::ADS)
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed * 0.5f;
-		GetCharacterMovement()->bUseControllerDesiredRotation = true;
-		GetCharacterMovement()->bOrientRotationToMovement = false;
+		SetMovementFacing(false);
 	}
 	else
 	{

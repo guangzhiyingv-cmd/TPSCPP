@@ -54,7 +54,7 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 
-	void SetHUDCrosshairs(float DeltaTime);
+	void SetHUDCrosshairs();
 
 private:
 	class ATPSCPPCharacter* Character;
@@ -103,8 +103,8 @@ private:
 	/** Current aim spread reduction, interpolated toward the aim state's target each frame. */
 	float AimSpreadReduction = 0.f;
 	
-	//Shooting Spread
-	float ShootingSpread = 0.f;
+	void UpdateSpread(float DeltaTime);
+	float CalculateShootingSpread() const;
 
 	/** Replicated only to the owning client when it changes. */
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)

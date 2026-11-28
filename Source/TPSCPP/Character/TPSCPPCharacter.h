@@ -14,6 +14,7 @@
 #include "TPSCPPCharacter.generated.h"
 
 class USpringArmComponent;
+class UCameraShakeBase;
 class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
@@ -115,7 +116,7 @@ protected:
 public:
 
 	/** Constructor */
-	ATPSCPPCharacter();	
+	ATPSCPPCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//~ Begin IAbilitySystemInterface
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
@@ -123,6 +124,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	virtual void Landed(const FHitResult& Hit) override;
 
 	virtual void Restart() override;
 
@@ -134,6 +137,10 @@ protected:
 
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	void HandleShoulderHold();
+	void EndShoulderHold();
+	bool bShoulderHoldHandled = false;
 
 	/** Initialize component references after all subobjects are created */
 	virtual void PostInitializeComponents() override;
@@ -294,13 +301,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	EAimState GetAimState() const { return AimState; }
 
+	TSubclassOf<UCameraShakeBase> GetLandingCameraShake() const { return LandingCameraShake; }
+
 	/** Returns the first-person view model weapon. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	USkeletalMeshComponent* GetViewModelWeapon() const { return ViewModelWeapon; }
 
-	/** Outputs the equipped weapon's LeftHandSocket data in CustomMesh component space. */
+	/** Returns the grip in mesh space, or relative to the bone carrying the weapon for same-frame hand IK. */
 	UFUNCTION(BlueprintCallable, Category="Combat")
-	void GetLeftHandSocketData(FTransform& OutRelativeTransform, FVector& OutXAxis, FVector& OutZAxis) const;
+	void GetLeftHandSocketData(FTransform& OutRelativeTransform, FVector& OutXAxis, FVector& OutZAxis,
+		bool bInAttachmentBoneSpace = false) const;
 
 	/** Returns the pitch angle for aim offset blending in the animation blueprint. */
 	UFUNCTION(BlueprintCallable, Category="Animation")
@@ -323,6 +333,16 @@ public:
 	/** Returns true while the character is sprinting: the local immediate flag or the replicated tag. */
 	UFUNCTION(BlueprintPure, Category = "Movement")
 	bool IsSprinting() const;
+	void SetMovementFacing(bool bEnable);
+
+private:
+	UPROPERTY(ReplicatedUsing=OnRep_MovementFacing)
+	bool bMovementFacing = true;
+
+	UFUNCTION()
+	void OnRep_MovementFacing();
+
+public:
 
 	/** Base movement speed. */
 	FORCEINLINE float GetWalkSpeed() const { return WalkSpeed; }
@@ -445,6 +465,14 @@ protected:
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Movement")
 	bool bIsSprinting = false;
+
+	/** Shake played by the owning player's third-person camera on landing. */
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Landing")
+	TSubclassOf<UCameraShakeBase> LandingCameraShake;
+
+	/** Downward speeds (cm/s) producing zero and full landing feedback. */
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Landing", meta = (ClampMin = "0"))
+	FVector2D LandingSpeedRange = FVector2D(120.0, 520.0);
 
 	/** Normal (hip-fire) camera: arm length. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera", meta = (ClampMin = 50))
