@@ -7,8 +7,11 @@ TPSCPP 是 UE 5.8 第三人称自由死斗项目。玩家经 Steam 会话进入�
 | 我想了解 | 先读 | 接手已有工作 |
 | --- | --- | --- |
 | 玩家怎样装备、瞄准、开火、换弹和淘汰对手 | [角色与战斗设计](CombatDesign.md) | [战斗进度与双端回归](CombatProgress.md) |
+| 为什么 Iris 移动时不像成熟射击游戏那样自然 | [基础移动品质评估与实测](Combat/LocomotionQuality.md) | [战斗进度与后续验证](CombatProgress.md) |
 | 玩家怎样开房、加入、计分和重生 | [联机与对局设计](MultiplayerDesign.md) | [联机进度与双机验证](MultiplayerProgress.md) |
 | 关卡如何支撑移动、交火和出生 | [GameLevel 白盒概览](../../TPSMAP/Docs/README.md) | [当前白盒与待走测位置](../../TPSMAP/Docs/GameLevel_Progress.md) |
+
+**角色渲染自学。** 想弄懂刘海为什么能露出眉眼，可从 [Iris 眼透教程](Rendering/IrisEyeReveal.md)看模型分层，再跟着材质节点练习深度、模板和透明混合。
 
 **第一次运行。** 用 UE 5.8 打开 [TPSCPP.uproject](../TPSCPP.uproject)。编辑器和游戏默认进入 GameLevel。看一局对战，用 2 名玩家、Play As Listen Server 进入 PIE；看建房和加入，从 Lobby 打开菜单。两种入口覆盖的流程不同。[启动地图配置](../Config/DefaultEngine.ini)
 

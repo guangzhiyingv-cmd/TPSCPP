@@ -1,0 +1,9 @@
+owner,setting,input,server_land_frame,server_fire_frame,server_hit_frame,server_mode_at_spawn,ammo_before,ammo_after,health_before,health_after,point_damage,hit_component,hit_bone,projectile,spawn_x,spawn_y,spawn_z,forward_x,forward_y,forward_z,hit_x,hit_y,hit_z,spawn_to_muzzle_cm
+host,off,hold,141,141,141,Walking,30,29,100.0,80.0,20.0,CharacterMesh0,upperarm_l,BP_ProjectileBullet_C_2,1660.310193,-740.961825,167.373105,-0.350737,0.936075,-0.027348,1612.78079,-628.361997,158.969218,0.0
+host,off,release,141,141,141,Walking,29,28,80.0,40.0,20.0,Iris,Head,BP_ProjectileBullet_C_3,1658.888388,-740.035558,167.825275,-0.410229,0.911958,0.006722,1606.584751,-632.151268,163.571012,0.0
+host,on,hold,141,141,141,Walking,30,29,100.0,80.0,20.0,CharacterMesh0,spine_05,BP_ProjectileBullet_C_2,1660.310193,-740.961825,167.373105,-0.434705,0.897328,-0.076373,1610.265929,-626.190915,152.712548,0.0
+host,on,release,141,141,141,Walking,29,28,80.0,60.0,20.0,Iris,Hair_Side_L_001,BP_ProjectileBullet_C_3,1658.890974,-740.035521,167.825442,-0.397616,0.917232,0.024237,1607.435097,-632.380918,165.655429,0.0
+client,off,hold,142,142,142,Walking,30,29,100.0,80.0,20.0,CharacterMesh0,upperarm_l,BP_ProjectileBullet_C_2,1659.423459,-746.853613,172.920058,-0.34992,0.935682,-0.045326,1610.00814,-627.491856,161.991873,0.0
+client,off,release,142,142,142,Walking,29,28,80.0,60.0,20.0,CharacterMesh0,upperarm_l,BP_ProjectileBullet_C_3,1657.636839,-746.881732,173.247079,-0.400754,0.910032,-0.106014,1606.005953,-634.508151,156.007272,0.0
+client,on,hold,142,142,142,Walking,30,29,100.0,80.0,20.0,CharacterMesh0,upperarm_l,BP_ProjectileBullet_C_2,1659.423459,-746.853613,172.920058,-0.401925,0.912116,-0.080624,1611.125689,-629.768414,157.597836,0.0
+client,on,release,142,142,142,Walking,29,28,80.0,40.0,20.0,CharacterMesh0,head,BP_ProjectileBullet_C_3,1657.625177,-746.881531,173.246008,-0.31889,0.947791,-0.001095,1615.93203,-620.749327,178.033634,0.0

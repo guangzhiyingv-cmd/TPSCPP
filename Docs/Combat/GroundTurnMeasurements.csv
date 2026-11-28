@@ -1,0 +1,33 @@
+﻿mode,build,route,input,yaw_at_4_frames_deg,hips_at_4_frames_deg,full_90_frame,max_50ms_contact_motion_cm,contact_start_frame,sole_marker,eligible_windows
+free,before,0,点按 D 后松开,33.333,28.124,,22.636,4,left_forefoot,21
+free,before,1,点按 A 后松开,33.333,34.624,,23.107,4,left_forefoot,22
+free,before,2,右转 90°,33.333,33.617,11,23.513,3,left_forefoot,19
+free,before,3,左转 90°,33.333,31.849,11,23.529,6,right_forefoot,26
+free,before,4,D 点按后换 A,33.333,30.475,,12.327,11,right_heel,16
+free,before,5,A 点按后换 D,33.333,34.608,,22.301,4,left_forefoot,17
+free,before,6,右转 90°（另一入步时机）,33.333,30.799,11,13.565,7,left_heel,20
+free,before,7,左转 90°（另一入步时机）,33.333,35.032,11,10.99,8,right_heel,16
+free,after,0,点按 D 后松开,20.0,18.336,,12.652,4,left_forefoot,21
+free,after,1,点按 A 后松开,20.0,24.768,,13.083,4,left_forefoot,21
+free,after,2,右转 90°,29.809,30.779,16,17.443,3,left_forefoot,18
+free,after,3,左转 90°,29.809,29.005,16,14.695,2,right_heel,26
+free,after,4,D 点按后换 A,20.0,20.995,,8.226,13,right_heel,16
+free,after,5,A 点按后换 D,20.0,24.758,,15.113,4,left_forefoot,17
+free,after,6,右转 90°（另一入步时机）,29.809,27.943,16,7.766,9,left_heel,21
+free,after,7,左转 90°（另一入步时机）,29.809,32.177,16,7.084,12,right_heel,16
+sprint,before,0,点按 D 后松开,33.333,28.336,,9.459,9,right_heel,13
+sprint,before,1,点按 A 后松开,33.333,32.961,,7.044,9,right_heel,13
+sprint,before,2,右转 90°,33.333,33.1,11,9.714,14,right_heel,11
+sprint,before,3,左转 90°,33.333,34.16,11,13.994,6,left_heel,19
+sprint,before,4,D 点按后换 A,33.333,33.955,,24.589,7,right_forefoot,22
+sprint,before,5,A 点按后换 D,33.333,32.96,,13.449,10,right_heel,14
+sprint,before,6,右转 90°（另一入步时机）,33.333,30.428,11,13.63,8,left_heel,19
+sprint,before,7,左转 90°（另一入步时机）,33.333,31.75,11,15.852,6,right_heel,24
+sprint,after,0,点按 D 后松开,20.0,18.509,,7.392,9,right_heel,13
+sprint,after,1,点按 A 后松开,20.0,23.131,,6.213,9,right_heel,13
+sprint,after,2,右转 90°,29.809,30.254,16,8.549,12,right_heel,11
+sprint,after,3,左转 90°,29.809,30.196,16,14.439,7,left_heel,17
+sprint,after,4,D 点按后换 A,20.0,24.037,,14.941,7,right_forefoot,22
+sprint,after,5,A 点按后换 D,20.0,23.131,,10.252,13,right_heel,11
+sprint,after,6,右转 90°（另一入步时机）,29.809,27.578,16,10.332,5,left_heel,19
+sprint,after,7,左转 90°（另一入步时机）,29.809,28.674,16,10.5,11,right_forefoot,25
